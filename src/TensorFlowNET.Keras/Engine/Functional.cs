@@ -23,8 +23,7 @@ namespace Tensorflow.Keras.Engine
         List<KerasHistory> _output_coordinates;
         public string[] NetworkNodes { get; set; }
 
-        Dictionary<int, int> tensor_usage_count;
-        public Dictionary<int, int> TensorUsageCount => tensor_usage_count;
+        Dictionary<long, int> tensor_usage_count;
 
         public Functional(Tensors inputs, Tensors outputs, string name = null)
             : base(new ModelArgs
@@ -38,11 +37,13 @@ namespace Tensorflow.Keras.Engine
             _output_layers = new List<ILayer>();
             _input_coordinates = new List<KerasHistory>();
             _output_coordinates = new List<KerasHistory>();
-            tensor_usage_count = new Dictionary<int, int>();
+            tensor_usage_count = new Dictionary<long, int>();
+            if (this is Sequential)
+                return;
             _init_graph_network(inputs, outputs);
         }
 
-        void _init_graph_network(Tensors inputs, Tensors outputs)
+        protected void _init_graph_network(Tensors inputs, Tensors outputs)
         {
             _is_graph_network = true;
             this.inputs = inputs;
@@ -63,7 +64,7 @@ namespace Tensorflow.Keras.Engine
             {
                 var (layer, node_index, tensor_index) = x.KerasHistory;
                 _output_layers.append(layer);
-                _output_coordinates.append(new KerasHistory(layer, node_index, tensor_index, x));
+                _output_coordinates.append(new KerasHistory(layer, node_index, tensor_index));
             }
 
             // Build self._input_layers:
@@ -71,7 +72,7 @@ namespace Tensorflow.Keras.Engine
             {
                 var (layer, node_index, tensor_index) = x.KerasHistory;
                 _input_layers.append(layer);
-                _input_coordinates.append(new KerasHistory(layer, node_index, tensor_index, x));
+                _input_coordinates.append(new KerasHistory(layer, node_index, tensor_index));
             }
 
             // Keep track of the network's nodes and layers.
@@ -114,33 +115,33 @@ namespace Tensorflow.Keras.Engine
 
         void ComputeTensorUsageCount()
         {
-            var available_tensors = inputs.Select(x => x.GetHashCode()).ToList();
+            var available_tensors = inputs.Select(x => x.Id).ToList();
             var depth_keys = NodesByDepth.Keys.OrderBy(x => x).Reverse().Skip(1).ToArray();
             foreach (var depth in depth_keys)
             {
                 foreach (var node in NodesByDepth[depth])
                 {
-                    var input_tensors = node.KerasInputs.Select(x => x.GetHashCode()).ToArray();
+                    var input_tensors = node.KerasInputs.Select(x => x.Id).ToArray();
                     if (input_tensors.issubset(available_tensors))
                     {
                         foreach (var tensor in node.KerasInputs)
                         {
-                            if (!tensor_usage_count.ContainsKey(tensor.GetHashCode()))
-                                tensor_usage_count[tensor.GetHashCode()] = 0;
-                            tensor_usage_count[tensor.GetHashCode()] += 1;
+                            if (!tensor_usage_count.ContainsKey(tensor.Id))
+                                tensor_usage_count[tensor.Id] = 0;
+                            tensor_usage_count[tensor.Id] += 1;
                         }
 
                         foreach (var output_tensor in node.Outputs)
-                            available_tensors.Add(output_tensor.GetHashCode());
+                            available_tensors.Add(output_tensor.Id);
                     }
                 }
             }
 
             foreach (var tensor in outputs)
             {
-                if (!tensor_usage_count.ContainsKey(tensor.GetHashCode()))
-                    tensor_usage_count[tensor.GetHashCode()] = 0;
-                tensor_usage_count[tensor.GetHashCode()] += 1;
+                if (!tensor_usage_count.ContainsKey(tensor.Id))
+                    tensor_usage_count[tensor.Id] = 0;
+                tensor_usage_count[tensor.Id] += 1;
             }
         }
 
@@ -300,9 +301,9 @@ namespace Tensorflow.Keras.Engine
             nodes_in_decreasing_depth.append(node);
         }
 
-        protected override Tensors Call(Tensors inputs, Tensor state = null, bool is_training = false)
+        protected override Tensors Call(Tensors inputs, Tensor state = null, bool? training = null)
         {
-            return run_internal_graph(inputs, is_training);
+            return run_internal_graph(inputs, training.Value);
         }
 
         Tensors run_internal_graph(Tensors inputs, bool training = false, Tensors mask = null)
@@ -314,12 +315,11 @@ namespace Tensorflow.Keras.Engine
                     input_t.KerasMask = masks[i];
             }
 
-            var tensor_dict = new Dictionary<int, Queue<Tensor>>();
+            var tensor_dict = new Dictionary<long, Queue<Tensor>>();
             foreach (var (x, y) in zip(this.inputs, inputs))
             {
                 var y1 = conform_to_reference_input(y, x);
-                var x_id = x.GetHashCode();
-                tensor_dict[x_id] = new Queue<Tensor>(Enumerable.Range(0, tensor_usage_count[x_id]).Select(x => y1));
+                tensor_dict[x.Id] = new Queue<Tensor>(Enumerable.Range(0, tensor_usage_count[x.Id]).Select(x => y1));
             }
 
             var depth_keys = NodesByDepth.Keys.OrderBy(x => x).Reverse().ToArray();
@@ -335,21 +335,20 @@ namespace Tensorflow.Keras.Engine
 
                     var layer_inputs = node.MapArguments(tensor_dict);
 
+                    tf.Logger.Debug($"Depth {depth}: {node.Layer}: {node.Layer.Name}");
                     var outputs = node.Layer.Apply(layer_inputs, is_training: training);
-
+                    foreach (var output in outputs.Where(x => x != null))
+                        tf.Logger.Information($"Depth {depth}: {node.Layer}: {node.Layer.Name} {output.TensorShape}");
                     // Update tensor_dict for next input
                     foreach (var (x_id, y) in zip(node.FlatOutputIds, outputs))
                         tensor_dict[x_id] = new Queue<Tensor>(Enumerable.Range(0, tensor_usage_count[x_id]).Select(x => y));
                 }
             }
 
-            var output_tensors = new List<Tensor>();
+            var output_tensors = new Tensors();
 
             foreach (var x in outputs)
-            {
-                var x_id = x.GetHashCode();
-                output_tensors.append(tensor_dict[x_id].Dequeue());
-            }
+                output_tensors.Add(tensor_dict[x.Id].Dequeue());
 
             return output_tensors;
         }

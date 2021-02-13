@@ -26,49 +26,12 @@ namespace Tensorflow
     /// </summary>
     public static class resource_variable_ops
     {
-        public static ITensorOrOperation shape_safe_assign_variable_handle(Tensor handle, int[] shape, Tensor value, string name = null)
+        public static Operation shape_safe_assign_variable_handle(Tensor handle, int[] shape, Tensor value, string name = null)
         {
             var value_tensor = ops.convert_to_tensor(value);
             return gen_resource_variable_ops.assign_variable_op(handle,
                                                       value_tensor,
                                                       name: name);
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="self"></param>
-        /// <param name="value"></param>
-        /// <param name="use_locking"></param>
-        /// <param name="read_value"></param>
-        /// <returns>
-        /// If `read_value` is `True`, this method will return the new value of the
-        /// variable after the assignment has completed.Otherwise, when in graph mode
-        /// it will return the `Operation` that does the assignment, and when in eager
-        /// mode it will return `None`.
-        /// </returns>
-        public static Operation assign(this Tensor self, Tensor value, bool use_locking = false, string name = null, bool read_value = true)
-        {
-            var value_tensor = ops.convert_to_tensor(value, dtype: self.dtype);
-            self.assert_is_compatible_with(value_tensor);
-            var assign_op = gen_resource_variable_ops.assign_variable_op(self, value_tensor, name: name);
-            if (read_value)
-            {
-                return self._lazy_read(assign_op);
-            }
-
-            return assign_op;
-        }
-
-        public static Operation _lazy_read(this Tensor self, Operation op)
-        {
-            variable_accessed(self);
-            throw new NotImplementedException();
-        }
-
-        public static void variable_accessed(this Tensor variable)
-        {
-            throw new NotImplementedException();
         }
 
         public static bool is_resource_variable(IVariableV1 var)
@@ -133,8 +96,10 @@ namespace Tensorflow
                 // We create an assert Op instead of checking right away in order to be
                 // compatible with ASYNC execution mode. Further, since not all devices
                 // support string tensors, we encode the assertion string in the Op name
-                /*gen_logging_ops._assert(
-                    math_ops.logical_not(exists), [exists], name = "EagerVariableNameReuse");*/
+                /*gen_logging_ops.assert(gen_math_ops.logical_not(exists),
+                    new[] { exists },
+                    name: "EagerVariableNameReuse");*/
+
                 var handle_data = new HandleData();
                 handle_data.IsSet = true;
                 handle_data.ShapeAndType.Add(new HandleShapeAndType

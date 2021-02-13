@@ -162,7 +162,11 @@ namespace Tensorflow
                     storage = new UnmanagedStorage(NPTypeCode.Boolean);
                     break;
                 case TF_DataType.TF_STRING:
-                    return np.array(StringBytes()[0]);
+                    var nd = np.array(StringData());
+                    return nd;
+                case TF_DataType.TF_UINT8:
+                    storage = new UnmanagedStorage(NPTypeCode.Byte);
+                    break;
                 case TF_DataType.TF_INT32:
                     storage = new UnmanagedStorage(NPTypeCode.Int32);
                     break;
@@ -181,28 +185,10 @@ namespace Tensorflow
 
             storage.Allocate(new Shape(shape));
 
-            var bytesize = (long)this.bytesize;
             System.Buffer.MemoryCopy(buffer.ToPointer(), storage.Address, bytesize, bytesize);
 
             return new NDArray(storage);
         }
-
-        /*protected unsafe NDArray GetScalar(TF_DataType dtype)
-        {
-            switch(dtype)
-            {
-                case TF_DataType.TF_STRING:
-                    return (NDArray)StringData()[0];
-                case TF_DataType.TF_INT32:
-                    return *(int*)buffer;
-                case TF_DataType.TF_FLOAT:
-                    return *(float*)buffer;
-                case TF_DataType.TF_DOUBLE:
-                    return *(double*)buffer;
-                default:
-                    return BufferToArray();
-            }
-        }*/
 
         /// <summary>
         /// Copies the memory of current buffer onto newly allocated array.
@@ -211,80 +197,11 @@ namespace Tensorflow
         public unsafe byte[] BufferToArray()
         {
             // ReSharper disable once LocalVariableHidesMember
-            var bytesize = (long)this.bytesize;
             var data = new byte[bytesize];
             fixed (byte* dst = data)
                 System.Buffer.MemoryCopy(buffer.ToPointer(), dst, bytesize, bytesize);
 
             return data;
-        }
-
-        /// <summary>
-        ///     Extracts string array from current Tensor.
-        /// </summary>
-        /// <exception cref="InvalidOperationException">When <see cref="dtype"/> != TF_DataType.TF_STRING</exception>
-        public unsafe string[] StringData()
-        {
-            if (dtype != TF_DataType.TF_STRING)
-                throw new InvalidOperationException($"Unable to call StringData when dtype != TF_DataType.TF_STRING (dtype is {dtype})");
-
-            //
-            // TF_STRING tensors are encoded with a table of 8-byte offsets followed by TF_StringEncode-encoded bytes.
-            // [offset1, offset2,...,offsetn, s1size, s1bytes, s2size, s2bytes,...,snsize,snbytes]
-            //
-            long size = 1;
-            foreach (var s in TensorShape.dims)
-                size *= s;
-
-            var buffer = new byte[size][];
-            var src = c_api.TF_TensorData(_handle);
-            src += (int)(size * 8);
-            for (int i = 0; i < buffer.Length; i++)
-            {
-                IntPtr dst = IntPtr.Zero;
-                ulong dstLen = 0;
-                var read = c_api.TF_StringDecode((byte*)src, bytesize, (byte**)&dst, ref dstLen, tf.Status.Handle);
-                tf.Status.Check(true);
-                buffer[i] = new byte[(int)dstLen];
-                Marshal.Copy(dst, buffer[i], 0, buffer[i].Length);
-                src += (int)read;
-            }
-
-            var _str = new string[buffer.Length];
-            for (int i = 0; i < _str.Length; i++)
-                _str[i] = Encoding.UTF8.GetString(buffer[i]);
-
-            return _str;
-        }
-
-        public unsafe byte[][] StringBytes()
-        {
-            if (dtype != TF_DataType.TF_STRING)
-                throw new InvalidOperationException($"Unable to call StringData when dtype != TF_DataType.TF_STRING (dtype is {dtype})");
-
-            //
-            // TF_STRING tensors are encoded with a table of 8-byte offsets followed by TF_StringEncode-encoded bytes.
-            // [offset1, offset2,...,offsetn, s1size, s1bytes, s2size, s2bytes,...,snsize,snbytes]
-            //
-            long size = 1;
-            foreach (var s in TensorShape.dims)
-                size *= s;
-
-            var buffer = new byte[size][];
-            var src = c_api.TF_TensorData(_handle);
-            src += (int)(size * 8);
-            for (int i = 0; i < buffer.Length; i++)
-            {
-                IntPtr dst = IntPtr.Zero;
-                ulong dstLen = 0;
-                var read = c_api.TF_StringDecode((byte*)src, bytesize, (byte**)&dst, ref dstLen, tf.Status.Handle);
-                tf.Status.Check(true);
-                buffer[i] = new byte[(int)dstLen];
-                Marshal.Copy(dst, buffer[i], 0, buffer[i].Length);
-                src += (int)read;
-            }
-
-            return buffer;
         }
     }
 }

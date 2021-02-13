@@ -24,6 +24,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Tensorflow.Contexts;
 using Tensorflow.Eager;
+using Tensorflow.Graphs;
 using Tensorflow.Util;
 using static Tensorflow.Binding;
 
@@ -77,6 +78,21 @@ namespace Tensorflow
             return get_default_graph().get_collection_ref<T>(key);
         }
 
+        public static Graph _get_graph_from_inputs(params object[] op_input_list)
+        {
+            var current_default_graph = get_default_graph();
+            if (current_default_graph.building_function)
+                return current_default_graph;
+
+            Graph graph = null;
+            foreach (var op_input in op_input_list)
+            {
+                if (op_input is Tensor op_input_tensor)
+                    graph = graph ?? op_input_tensor.graph;
+            }
+            return graph ?? current_default_graph;
+        }
+
         public static Graph _get_graph_from_inputs(Tensors op_input_list)
             => _get_graph_from_inputs(op_input_list: op_input_list, graph: null);
 
@@ -85,7 +101,7 @@ namespace Tensorflow
             foreach (var op_input in op_input_list)
             {
                 // Determine if this is a valid graph_element.
-                var graph_element = op_input;
+                // var graph_element = op_input;
             }
 
             return get_default_graph();
@@ -101,14 +117,45 @@ namespace Tensorflow
         public static Tensor convert_to_tensor(object value,
             TF_DataType dtype = TF_DataType.DtInvalid,
             string name = null,
+            bool as_ref = false,
             TF_DataType preferred_dtype = TF_DataType.DtInvalid,
             Context ctx = null)
         {
-            return internal_convert_to_tensor(value,
-                dtype: dtype,
-                name: name,
-                preferred_dtype: preferred_dtype,
-                as_ref: false);
+            if (dtype == TF_DataType.DtInvalid)
+                dtype = preferred_dtype;
+
+            if (value is EagerTensor eager_tensor)
+            {
+                if (tf.executing_eagerly())
+                    return eager_tensor;
+                else
+                {
+                    var graph = get_default_graph();
+                    if (!graph.building_function)
+                        throw new RuntimeError("Attempting to capture an EagerTensor without building a function.");
+                    return (graph as FuncGraph).capture(eager_tensor, name: name);
+                }
+            }
+
+            Tensor ret = value switch
+            {
+                NDArray nd => constant_op.constant(nd, dtype: dtype, name: name),
+                EagerTensor tensor => tensor.dtype == TF_DataType.TF_RESOURCE
+                            ? tensor.AsPlaceholder(name: name)
+                            : tensor.AsConstant(name: name),
+                Tensor tensor => tensor,
+                Tensor[] tensors => array_ops._autopacking_helper(tensors, dtype, name == null ? "packed" : name),
+                RefVariable varVal => varVal._TensorConversionFunction(dtype: dtype, name: name, as_ref: as_ref),
+                ResourceVariable varVal => varVal._TensorConversionFunction(dtype: dtype, name: name, as_ref: as_ref),
+                TensorShape ts => constant_op.constant(ts.dims, dtype: dtype, name: name),
+                int[] dims => constant_op.constant(dims, dtype: dtype, name: name),
+                string str => constant_op.constant(str, dtype: tf.@string, name: name),
+                string[] str => constant_op.constant(str, dtype: tf.@string, name: name),
+                IEnumerable<object> objects => array_ops._autopacking_conversion_function(objects, dtype: dtype, name: name),
+                _ => constant_op.constant(value, dtype: dtype, name: name)
+            };
+
+            return ret;
         }
 
 
@@ -118,9 +165,7 @@ namespace Tensorflow
         }
 
         public static Tensor internal_convert_to_tensor_or_composite(Tensor value, TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool as_ref = false)
-        {
-            return internal_convert_to_tensor(value, dtype: dtype, name: name, as_ref: as_ref);
-        }
+            => convert_to_tensor(value, dtype: dtype, name: name, as_ref: as_ref);
 
         /// <summary>
         /// Wrapper for `Graph.control_dependencies()` using the default graph.
@@ -190,13 +235,9 @@ namespace Tensorflow
                 // Add attrs
                 foreach (var attr in node_def.Attr)
                 {
-                    var bytes = attr.Value.ToByteArray(); //TODO: we can use attr.Value.WriteTo with a memory stream.
-                    var protoHandle = Marshal.AllocHGlobal(bytes.Length);
-                    Marshal.Copy(bytes, 0, protoHandle, bytes.Length);
-                    uint len = (uint)bytes.Length;
-                    c_api.TF_SetAttrValueProto(op_desc, attr.Key, protoHandle, proto_len: len, status: status.Handle);
+                    var bytes = attr.Value.ToByteArray();
+                    c_api.TF_SetAttrValueProto(op_desc, attr.Key, bytes, proto_len: bytes.Length, status: status.Handle);
                     status.Check(true);
-                    Marshal.FreeHGlobal(protoHandle);
                 }
 
                 var c_op = c_api.TF_FinishOperation(op_desc, status.Handle);
@@ -310,6 +351,11 @@ namespace Tensorflow
         public static int uid()
         {
             return Interlocked.Increment(ref uid_number);
+        }
+
+        public static void reset_uid()
+        {
+            uid_number = -1;
         }
 
         public static void colocate_with(bool ignore_existing = false)
@@ -455,59 +501,17 @@ namespace Tensorflow
             return ret.ToArray();
         }
 
-        public static Tensor[] internal_convert_n_to_tensor(object values, TF_DataType dtype = TF_DataType.DtInvalid,
+        public static Tensor[] internal_convert_n_to_tensor(object[] values, TF_DataType dtype = TF_DataType.DtInvalid,
             string name = null, TF_DataType preferred_dtype = TF_DataType.DtInvalid,
             bool as_ref = false)
         {
             var ret = new List<Tensor>();
-
-            foreach ((int i, object value) in enumerate(values as object[]))
+            foreach ((int i, object value) in enumerate(values))
             {
                 string n = string.IsNullOrEmpty(name) ? "" : $"{name}_{i}";
-                ret.Add(internal_convert_to_tensor(value, dtype: dtype, name: n, as_ref: as_ref, preferred_dtype: preferred_dtype));
+                ret.Add(convert_to_tensor(value, dtype: dtype, name: n, as_ref: as_ref, preferred_dtype: preferred_dtype));
             }
-
             return ret.ToArray();
-        }
-
-        public static Tensor internal_convert_to_tensor(object value, TF_DataType dtype = TF_DataType.DtInvalid,
-            string name = null, TF_DataType preferred_dtype = TF_DataType.DtInvalid,
-            bool as_ref = false,
-            string scope = null)
-        {
-            if (dtype == TF_DataType.DtInvalid)
-                dtype = preferred_dtype;
-
-            switch (value)
-            {
-                case NDArray nd:
-                    return constant_op.constant(nd, dtype: dtype, name: name);
-                case EagerTensor tensor:
-                    if (tf.executing_eagerly())
-                        return tensor;
-                    else
-                        return tensor.dtype == TF_DataType.TF_RESOURCE
-                            ? tensor.AsPlaceholder(name: name)
-                            : tensor.AsContatnt(name: name);
-                case Tensor tensor:
-                    return tensor;
-                case Tensor[] tensors:
-                    return array_ops._autopacking_helper(tensors, dtype, name == null ? "packed" : name);
-                case RefVariable varVal:
-                    return varVal._TensorConversionFunction(dtype: dtype, name: name, as_ref: as_ref);
-                case ResourceVariable varVal:
-                    return varVal._TensorConversionFunction(dtype: dtype, name: name, as_ref: as_ref);
-                case TensorShape ts:
-                    return constant_op.constant(ts.dims, dtype: dtype, name: name);
-                case string str:
-                    return constant_op.constant(value, dtype: tf.@string, name: name);
-                case int[] dims:
-                    return constant_op.constant(dims, dtype: dtype, name: name);
-                case object[] objects:
-                    return array_ops._autopacking_conversion_function(objects, dtype: dtype, name: name);
-                default:
-                    return constant_op.constant(value, dtype: dtype, name: name);
-            }
         }
 
         public static string strip_name_scope(string name, string export_scope = "")
@@ -526,6 +530,14 @@ namespace Tensorflow
         {
             var g = get_default_graph();
             return g.get_name_scope();
+        }
+
+        public static bool executing_eagerly_outside_functions()
+        {
+            if (tf.Context.executing_eagerly())
+                return true;
+            else
+                throw new NotImplementedException("");
         }
     }
 }

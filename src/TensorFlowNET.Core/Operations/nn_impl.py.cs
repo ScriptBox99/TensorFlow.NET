@@ -21,6 +21,31 @@ namespace Tensorflow
 {
     public class nn_impl
     {
+        public static Tensor conv2d_transpose(Tensor value = null,
+            IVariableV1 filter = null,
+            Tensor output_shape = null,
+            TensorShape strides = null,
+            string padding = "SAME",
+            string data_format = "NHWC",
+            string name = null,
+            TensorShape dilations = null)
+        {
+            if (dilations == null)
+                dilations = (1, 1, 1, 1);
+            return tf_with(ops.name_scope(name, "conv2d_transpose", new { value, filter, output_shape }), scope =>
+            {
+                return gen_nn_ops.conv2d_backprop_input(
+                    input_sizes: output_shape,
+                    filter: filter.AsTensor(),
+                    out_backprop: value,
+                    strides: strides,
+                    padding: padding,
+                    data_format: data_format,
+                    dilations: dilations,
+                    name: name);
+            });
+        }
+
         /// <summary>
         /// Normalizes along dimension `axis` using an L2 norm.
         /// </summary>
@@ -31,7 +56,7 @@ namespace Tensorflow
         /// <returns></returns>
         public static Tensor l2_normalize(Tensor x,
             int axis = 0,
-            float epsilon = 1e-12f,
+            Tensor epsilon =null,
             string name = null)
         {
             return tf_with(ops.name_scope(name, "l2_normalize", new { x }), scope =>
@@ -39,7 +64,7 @@ namespace Tensorflow
                 x = ops.convert_to_tensor(x, name: "x");
                 var sq = math_ops.square(x);
                 var square_sum = math_ops.reduce_sum(sq, axis, keepdims: true);
-                var x_inv_norm = math_ops.rsqrt(math_ops.maximum(square_sum, epsilon));
+                var x_inv_norm = math_ops.rsqrt(math_ops.maximum(square_sum, epsilon == null ? tf.Variable(1e-12f) : epsilon));
                 return math_ops.multiply(x, x_inv_norm, name: name);
             });
         }
@@ -83,6 +108,23 @@ namespace Tensorflow
             });
         }
 
+        public static Tensor batch_normalization(Tensor x,
+            Tensor mean,
+            Tensor variance,
+            Tensor offset,
+            Tensor scale,
+            float variance_epsilon = 0.001f,
+            string name = null)
+        {
+            return tf_with(ops.name_scope(name, "batchnorm", new { x, mean, variance, scale, offset }), scope =>
+            {
+                var inv = math_ops.rsqrt(variance + variance_epsilon);
+                inv *= scale;
+                return x * math_ops.cast(inv, x.dtype) + math_ops.cast(
+                    offset == null ? (-mean * inv) : (offset - mean * inv), x.dtype);
+            });
+        }
+
         /// <summary>
         /// Batch normalization.
         /// </summary>
@@ -99,38 +141,37 @@ namespace Tensorflow
         public static Tensor[] fused_batch_norm(Tensor x,
             IVariableV1 scale,
             IVariableV1 offset,
-            Tensor mean,
-            Tensor variance,
+            IVariableV1 mean,
+            IVariableV1 variance,
             float epsilon = 0.001f,
             string data_format = "NHWC",
             bool is_training = true,
-            string name = null)
+            string name = null,
+            float exponential_avg_factor = 1.0f)
         {
-            x = ops.convert_to_tensor(x, name: "input");
-            var scale_tensor = ops.convert_to_tensor(scale, name: "scale");
-            var offset_tensor = ops.convert_to_tensor(offset, name: "offset");
-            if (mean == null)
+            /*if (mean == null)
                 mean = constant_op.constant(new float[0]);
             if (variance == null)
-                variance = constant_op.constant(new float[0]);
+                variance = constant_op.constant(new float[0]);*/
             var min_epsilon = 1.001e-5f;
             epsilon = epsilon > min_epsilon ? epsilon : min_epsilon;
 
             var results = gen_nn_ops.fused_batch_norm_v3(x,
-                scale_tensor,
-                offset_tensor,
+                scale,
+                offset,
                 mean,
                 variance,
-                epsilon,
-                data_format,
-                is_training,
-                name);
+                epsilon: epsilon,
+                exponential_avg_factor: exponential_avg_factor,
+                data_format: data_format,
+                is_training: is_training,
+                name: name);
 
             var y = results[0];
-            var batch_mean = results[1];
-            var batch_var = results[2];
+            var running_mean = results[1];
+            var running_var = results[2];
 
-            return new[] { y, batch_mean, batch_var };
+            return new[] { y, running_mean, running_var };
         }
 
         /// <summary>

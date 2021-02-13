@@ -1,57 +1,56 @@
 ﻿using NumSharp;
 using System;
+using System.Linq;
 using static Tensorflow.Binding;
 
 namespace Tensorflow.Eager
 {
-    public partial class EagerTensor : Tensor
+    public partial class EagerTensor
     {
-        public EagerTensor() : base(IntPtr.Zero)
+        public EagerTensor(SafeTensorHandleHandle handle)
         {
-
-        }
-
-        public EagerTensor(SafeTensorHandleHandle handle) : base(IntPtr.Zero)
-        {
+            _id = ops.uid();
             EagerTensorHandle = handle;
             Resolve();
         }
 
         public EagerTensor(string value, string device_name) : base(value)
         {
-            EagerTensorHandle = c_api.TFE_NewTensorHandle(_handle, tf.Status.Handle);
-            Resolve();
+            NewEagerTensorHandle(_handle);
         }
 
         public EagerTensor(byte[] value, string device_name, TF_DataType dtype) : base(value, dType: dtype)
         {
-            EagerTensorHandle = c_api.TFE_NewTensorHandle(_handle, tf.Status.Handle);
-            Resolve();
+            NewEagerTensorHandle(_handle);
         }
 
         public EagerTensor(string[] value, string device_name) : base(value)
         {
-            EagerTensorHandle = c_api.TFE_NewTensorHandle(_handle, tf.Status.Handle);
-            Resolve();
+            NewEagerTensorHandle(_handle);
         }
 
         public EagerTensor(NDArray value, string device_name) : base(value)
         {
-            EagerTensorHandle = c_api.TFE_NewTensorHandle(_handle, tf.Status.Handle);
-            Resolve();
+            NewEagerTensorHandle(_handle);
         }
 
-        public EagerTensor Resolve()
+        void NewEagerTensorHandle(IntPtr h)
         {
             _id = ops.uid();
+            EagerTensorHandle = c_api.TFE_NewTensorHandle(h, tf.Status.Handle);
+            tf.Status.Check(true);
+#if TRACK_TENSOR_LIFE
+            print($"New EagerTensorHandle {EagerTensorHandle} {Id} From 0x{h.ToString("x16")}");
+#endif
+        }
 
-            if (_handle == IntPtr.Zero)
-                _handle = c_api.TFE_TensorHandleResolve(EagerTensorHandle, tf.Status.Handle);
-
-            //print($"new Tensor {Id} {_handle.ToString("x16")}");
-            //print($"new TensorHandle {Id} {EagerTensorHandle.ToString("x16")}");
-
-            return this;
+        private void Resolve()
+        {
+            _handle = c_api.TFE_TensorHandleResolve(EagerTensorHandle, tf.Status.Handle);
+            tf.Status.Check(true);
+#if TRACK_TENSOR_LIFE
+            print($"Take EagerTensorHandle {EagerTensorHandle} {Id} Resolving 0x{_handle.ToString("x16")}");
+#endif
         }
 
         /// <summary>
@@ -60,23 +59,14 @@ namespace Tensorflow.Eager
         /// <returns></returns>
         public Tensor AsPlaceholder(string name = null)
         {
-            Tensor placeholder = null;
-            tf_with(ops.control_dependencies(null), delegate
-            {
-                placeholder = tf.placeholder(dtype, name: name);
-            });
+            var placeholder = tf_with(ops.control_dependencies(null), _ => tf.placeholder(dtype, name: name));
             copy_handle_data(placeholder);
             return placeholder;
         }
 
-        public Tensor AsContatnt(string name = null)
+        public Tensor AsConstant(string name = null)
         {
-            Tensor constant = null;
-            tf_with(ops.control_dependencies(null), delegate
-            {
-                constant = tf.constant(numpy(), name: name);
-            });
-            return constant;
+            return tf_with(ops.control_dependencies(null), _ => tf.constant(numpy(), name: name));
         }
 
         void copy_handle_data(Tensor target_t)
@@ -89,21 +79,10 @@ namespace Tensorflow.Eager
             }
         }
 
-        public override IntPtr ToPointer()
-            => EagerTensorHandle?.DangerousGetHandle() ?? IntPtr.Zero;
-
-        protected override void DisposeManagedResources()
-        {
-            base.DisposeManagedResources();
-
-            //print($"deleting DeleteTensorHandle {Id} {EagerTensorHandle.ToString("x16")}");
-            EagerTensorHandle.Dispose();
-        }
-
         protected override void DisposeUnmanagedResources(IntPtr handle)
         {
             base.DisposeUnmanagedResources(handle);
-            //print($"deleting DeleteTensorHandle {Id} {_handle.ToString("x16")}");
+            EagerTensorHandle.Dispose();
         }
     }
 }

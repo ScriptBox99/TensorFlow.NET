@@ -13,9 +13,9 @@ namespace Tensorflow
     /// and Tensor[] from Tensors implicitily. 
     /// It works for tuple and scalar as well.
     /// </summary>
-    public class Tensors : IEnumerable<Tensor>
+    public class Tensors : IEnumerable<Tensor>, IDisposable
     {
-        Tensor[] items;
+        List<Tensor> items = new List<Tensor>();
 
         public TF_DataType dtype => items.First().dtype;
         public TensorShape shape => items.First().TensorShape;
@@ -23,6 +23,7 @@ namespace Tensorflow
         public Graph graph => items.First().graph;
         public bool IsEagerTensor => items.First().IsEagerTensor;
         public bool IsList { get; set; }
+        public int Length => items.Count();
 
         public Tensor this[int index]
         {
@@ -39,17 +40,17 @@ namespace Tensorflow
 
         public Tensors(params Tensor[] tensors)
         {
-            items = tensors;
+            items.AddRange(tensors);
+        }
+
+        public Tensors(IEnumerable<Tensor> tensors)
+        {
+            items.AddRange(tensors);
         }
 
         public Tensors(NDArray nd)
         {
-            items = new[] { ops.convert_to_tensor(nd) };
-        }
-
-        public Tensors(int count)
-        {
-            items = new Tensor[count];
+            items.Add(ops.convert_to_tensor(nd));
         }
 
         public IEnumerator<Tensor> GetEnumerator()
@@ -58,13 +59,23 @@ namespace Tensorflow
                 yield return tensor;
         }
 
+        public void Add(Tensor tensor)
+            => items.Add(tensor);
+
+        public void AddRange(Tensor[] tensors)
+            => items.AddRange(tensors);
+
+        public void Insert(int index, Tensor tensor)
+            => items.Insert(index, tensor);
+
         IEnumerator IEnumerable.GetEnumerator()
-        {
-            throw new NotImplementedException();
-        }
+            => GetEnumerator();
 
         public static implicit operator Tensors(Tensor tensor)
             => new Tensors(tensor);
+
+        public static implicit operator Tensors((Tensor, Tensor) tuple)
+            => new Tensors(tuple.Item1, tuple.Item2);
 
         public static implicit operator Tensors(NDArray nd)
             => new Tensors(nd);
@@ -79,11 +90,17 @@ namespace Tensorflow
             => tensors.FirstOrDefault();
 
         public static implicit operator Tensor[](Tensors tensors)
-            => tensors.items;
+            => tensors.items.ToArray();
 
         public override string ToString()
-            => items.Length == 1
+            => items.Count() == 1
                ? items.First().ToString()
-               : items.Length + " Tensors" + ". " + string.Join(", ", items.Select(x => x.name));
+               : items.Count() + " Tensors" + ". " + string.Join(", ", items.Select(x => x.name));
+
+        public void Dispose()
+        {
+            foreach (var item in items)
+                item.Dispose();
+        }
     }
 }

@@ -122,6 +122,7 @@ namespace Tensorflow
 
         private static EagerTensor convert_to_eager_tensor(object value, Context ctx, TF_DataType dtype = TF_DataType.DtInvalid)
         {
+            ctx.ensure_initialized();
             // convert data type
             if (dtype != TF_DataType.DtInvalid &&
                 value.GetType().Name != "NDArray" &&
@@ -155,8 +156,8 @@ namespace Tensorflow
                     return val;
                 case NDArray val:
                     return new EagerTensor(val, ctx.DeviceName);
-                //case TensorShape val:
-                //return new EagerTensor(val.dims, ctx.DeviceName);
+                case TensorShape val:
+                    return new EagerTensor(val.dims, ctx.DeviceName);
                 case string val:
                     return new EagerTensor(val, ctx.DeviceName);
                 case string[] val:

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using Tensorflow.Keras.ArgsDefinition;
 using static Tensorflow.Binding;
 
@@ -7,31 +8,35 @@ namespace Tensorflow.Keras.Engine.DataAdapters
     /// <summary>
     /// Adapter that handles Tensor-like objects, e.g. EagerTensor and NumPy.
     /// </summary>
-    public class TensorLikeDataAdapter : IDataAdapter
+    public class TensorLikeDataAdapter : DataAdapter, IDataAdapter
     {
-        TensorLikeDataAdapterArgs args;
         int _size;
         int _batch_size;
         int num_samples;
         int num_full_batches;
-        IDatasetV2 _dataset;
+        int _partial_batch_size;
 
-        public TensorLikeDataAdapter(TensorLikeDataAdapterArgs args)
+        public TensorLikeDataAdapter(DataAdapterArgs args)
         {
             this.args = args;
             _process_tensorlike();
             num_samples = args.X.shape[0];
             var batch_size = args.BatchSize == -1 ? 32 : args.BatchSize;
             _batch_size = batch_size;
-            _size = Convert.ToInt32(Math.Ceiling(num_samples / (batch_size + 0f)));
+            _size = num_samples < batch_size ? num_samples % batch_size : num_samples / batch_size;
             num_full_batches = num_samples / batch_size;
-            var _partial_batch_size = num_samples % batch_size;
+            _partial_batch_size = num_samples % batch_size;
 
             var indices_dataset = tf.data.Dataset.range(1);
-            indices_dataset = indices_dataset.repeat();
+            indices_dataset = indices_dataset.repeat(args.Epochs);
             indices_dataset = indices_dataset.map(permutation).prefetch(1);
             indices_dataset = indices_dataset.flat_map(slice_batch_indices);
-            _dataset = slice_inputs(indices_dataset, args.X, args.Y);
+            var inputs = new Tensors();
+            if (args.X != null)
+                inputs.Add(args.X);
+            if (args.Y != null)
+                inputs.Add(args.Y);
+            dataset = slice_inputs(indices_dataset, inputs);
         }
 
         Tensor permutation(Tensor tensor)
@@ -53,46 +58,40 @@ namespace Tensorflow.Keras.Engine.DataAdapters
             var first_k_indices = array_ops.slice(indices, new int[] { 0 }, new int[] { num_in_full_batch });
             first_k_indices = array_ops.reshape(first_k_indices, new int[] { num_full_batches, _batch_size });
             var flat_dataset = tf.data.Dataset.from_tensor_slices(first_k_indices);
+            if (_partial_batch_size > 0)
+            {
+                var array = array_ops.slice(indices, 
+                    new[] { constant_op.constant(num_in_full_batch)}, 
+                    new[] { constant_op.constant(_partial_batch_size)});
+                var index_remainder = tf.data.Dataset.from_tensor(array);
+                flat_dataset = flat_dataset.concatenate(index_remainder);
+            }
+                
             return flat_dataset;
         }
 
-        IDatasetV2 slice_inputs(IDatasetV2 indices_dataset, Tensor x, Tensor y)
+        IDatasetV2 slice_inputs(IDatasetV2 indices_dataset, Tensors elements)
         {
-            var dataset2 = tf.data.Dataset.from_tensor(x, y).repeat();
-            var dataset = tf.data.Dataset.zip(indices_dataset, dataset2);
+            var dataset = tf.data.Dataset.from_tensor(elements).repeat();
+            dataset = tf.data.Dataset.zip(indices_dataset, dataset);
 
-            dataset = dataset.map((batch, data) =>
+            dataset = dataset.map(inputs =>
             {
-                var x = gen_array_ops.gather_v2(data.Item1, batch, 0);
-                var y = gen_array_ops.gather_v2(data.Item2, batch, 0);
-                return (x, y);
+                var indices = inputs[0];
+                var results = inputs.Skip(1)
+                    .Select(x => gen_array_ops.gather_v2(x, indices, 0))
+                    .ToArray();
+                return new Tensors(results);
             });
 
-            dataset = dataset.with_options(new DatasetOptions { });
-
-            return dataset;
+            return dataset.with_options(new DatasetOptions { });
         }
 
-        public bool CanHandle(Tensor x, Tensor y = null)
-        {
-            throw new NotImplementedException();
-        }
+        public override int GetSize()
+            => _size;
 
         void _process_tensorlike()
         {
-        }
-
-        public IDatasetV2 GetDataset()
-            => _dataset;
-
-        public int GetSize()
-            => _size;
-
-        public (Tensor, Tensor) Expand1d(Tensor x, Tensor y)
-        {
-            if (y.TensorShape.ndim == 1)
-                y = array_ops.expand_dims(y, axis: -1);
-            return (x, y);
         }
     }
 }

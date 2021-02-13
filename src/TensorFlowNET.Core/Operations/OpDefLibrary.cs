@@ -30,7 +30,7 @@ namespace Tensorflow
 
         public Operation _apply_op_helper(string op_type_name, string name = null, Dictionary<string, object> keywords = null)
         {
-            var g = ops.get_default_graph();
+            var g = ops._get_graph_from_inputs(keywords == null ? new object[0] : keywords.Values.ToArray());
             var op_def = g.GetOpDef(op_type_name);
 
             // Default name if not specified.
@@ -59,7 +59,8 @@ namespace Tensorflow
             var input_types = new List<TF_DataType>();
             object values = null;
 
-            return tf_with(ops.name_scope(name), scope =>
+            g.as_default();
+            var ret_op = tf_with(ops.name_scope(name), scope =>
             {
                 var inferred_from = new Dictionary<string, object>();
                 var base_types = new List<TF_DataType>();
@@ -131,7 +132,7 @@ namespace Tensorflow
                         if (!input_arg.IsRef && dtype != DataType.DtInvalid)
                             dtype = dtype.as_base_dtype();
 
-                        values = ops.internal_convert_n_to_tensor(values,
+                        values = ops.internal_convert_n_to_tensor(values as object[],
                             name: input_arg.Name,
                             dtype: dtype.as_tf_dtype(),
                             preferred_dtype: default_dtype.as_tf_dtype(),
@@ -148,7 +149,7 @@ namespace Tensorflow
                         else if (default_type_attr_map.ContainsKey(input_arg.TypeAttr))
                             default_dtype = (DataType)default_type_attr_map[input_arg.TypeAttr];
 
-                        var value = ops.internal_convert_to_tensor(values,
+                        var value = ops.convert_to_tensor(values,
                             name: input_name,
                             dtype: dtype.as_tf_dtype(),
                             as_ref: input_arg.IsRef,
@@ -249,6 +250,8 @@ namespace Tensorflow
 
                 return op;
             });
+            g.Exit();
+            return ret_op;
         }
 
         private void _MaybeColocateWith(ITensorOrOperation[] inputs)
@@ -276,12 +279,16 @@ namespace Tensorflow
                 }
                 else
                 {
-                    attrs[input_arg.NumberAttr] = (values as Tensor[]).Length;
-                    inferred_from[input_arg.NumberAttr] = input_name;
-                    var num_attr = op_def.Attr.First(x => x.Name == input_arg.NumberAttr);
-                    if (num_attr.HasMinimum && (values as Tensor[]).Length < num_attr.Minimum)
-                        throw new ValueError($"List argument '{input_name}' to '{op_type_name}' Op with length {(values as Tensor[]).Length} shorter " +
-                            $"than minimum length {num_attr.Minimum}");
+                    if(values is Tensor[] tensors)
+                    {
+                        var num_attr = op_def.Attr.First(x => x.Name == input_arg.NumberAttr);
+                        if (num_attr.HasMinimum && tensors.Length < num_attr.Minimum)
+                            throw new ValueError($"List argument '{input_name}' to '{op_type_name}' Op with length {(values as Tensor[]).Length} shorter " +
+                                $"than minimum length {num_attr.Minimum}");
+
+                        attrs[input_arg.NumberAttr] = Convert.ToInt64(tensors.Length);
+                        inferred_from[input_arg.NumberAttr] = input_name;
+                    }
                 }
 
                 // All tensors must have the same base type.
@@ -378,7 +385,10 @@ namespace Tensorflow
                     attr_value.F = (float)value;
                     break;
                 case "int":
-                    attr_value.I = (int)value;
+                    if (value is long value_long)
+                        attr_value.I = value_long;
+                    else
+                        attr_value.I = Convert.ToInt64(value);
                     if (attr_def.HasMinimum && attr_value.I < attr_def.Minimum)
                         throw new ValueError($"Attr '{attr_def.Name}' of '{op_def.Name}' Op passed {attr_value.I} less than minimum {attr_def.Minimum}.");
                     break;

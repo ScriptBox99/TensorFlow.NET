@@ -14,41 +14,18 @@
    limitations under the License.
 ******************************************************************************/
 
+using Tensorflow.Debugging;
+
 namespace Tensorflow
 {
     public partial class tensorflow
     {
         /// <summary>
-        /// Assert the condition `x == y` holds element-wise.
+        /// Public API for tf.debugging namespace
+        /// https://www.tensorflow.org/api_docs/python/tf/debugging
+        /// More debugging instructions
+        /// https://developer.ibm.com/technologies/artificial-intelligence/tutorials/debug-tensorflow/
         /// </summary>
-        /// <typeparam name="T1"></typeparam>
-        /// <typeparam name="T2"></typeparam>
-        /// <param name="t1"></param>
-        /// <param name="t2"></param>
-        /// <param name="data"></param>
-        /// <param name="message"></param>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        public Tensor assert_equal<T1, T2>(T1 t1,
-            T2 t2,
-            object[] data = null,
-            string message = null,
-            string name = null)
-            => check_ops.assert_equal(t1,
-                t2,
-                data: data,
-                message: message,
-                name: name);
-
-        public Tensor assert_greater_equal<T1, T2>(Tensor x,
-            Tensor y,
-            object[] data = null,
-            string message = null,
-            string name = null)
-            => check_ops.assert_greater_equal(x,
-                y,
-                data: data,
-                message: message,
-                name: name);
+        public DebugImpl debugging => new DebugImpl();
     }
 }

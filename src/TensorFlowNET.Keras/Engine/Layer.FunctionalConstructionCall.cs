@@ -1,6 +1,7 @@
 ﻿using System;
 using Tensorflow.Keras.Utils;
 using static Tensorflow.Binding;
+using static Tensorflow.KerasApi;
 
 namespace Tensorflow.Keras.Engine
 {
@@ -20,12 +21,10 @@ namespace Tensorflow.Keras.Engine
                 base_layer_utils.create_keras_history(inputs);
 
             Tensors outputs = null;
-            using var ctxManager = CallContext.enter();
+            using var ctxManager = CallContext.enter(build_graph: true);
 
-            // using var graph = tf.keras.backend.get_graph().as_default();
-
-            if (!inputs.IsEagerTensor)
-                tf.Context.graph_mode();
+            var graph = keras.backend.get_graph();
+            graph.as_default();
 
             tf_with(ops.name_scope(_name_scope()), scope =>
             {
@@ -41,14 +40,13 @@ namespace Tensorflow.Keras.Engine
                     throw new NotImplementedException("");
 
                 outputs = Call(inputs);
-
-                outputs = _set_connectivity_metadata_(inputs, outputs);
+                
+                _set_connectivity_metadata_(inputs, outputs);
                 _handle_activity_regularization(inputs, outputs);
                 _set_mask_metadata(inputs, outputs, null);
             });
 
-            if (!inputs.IsEagerTensor)
-                tf.Context.restore_mode();
+            graph.Exit();
 
             return outputs;
         }

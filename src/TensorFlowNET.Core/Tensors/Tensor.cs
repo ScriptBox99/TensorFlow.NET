@@ -15,6 +15,7 @@
 ******************************************************************************/
 
 using NumSharp;
+using NumSharp.Backends.Unmanaged;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -23,6 +24,7 @@ using System.Runtime.InteropServices;
 using Tensorflow.Eager;
 using Tensorflow.Framework;
 using Tensorflow.Keras.Engine;
+using Tensorflow.Variables;
 using static Tensorflow.Binding;
 
 namespace Tensorflow
@@ -253,37 +255,41 @@ namespace Tensorflow
         /// <remarks>Equivalent to what you would perform inside <see cref="DisposableObject.Dispose"/></remarks>
         protected override void DisposeManagedResources()
         {
-            AllocationReferenceHolder = null;
+
         }
 
         [SuppressMessage("ReSharper", "ConvertIfStatementToSwitchStatement")]
         protected override void DisposeUnmanagedResources(IntPtr handle)
         {
-            c_api.TF_DeleteTensor(handle);
-            if (AllocationHandle == null)
-                return;
+#if TRACK_TENSOR_LIFE
+            print($"Delete Tensor 0x{handle.ToString("x16")} {AllocationType} Data: 0x{TensorDataPointer.ToString("x16")}");
+#endif
+            if (AllocationHandle != null)
+            {
+                if (AllocationType == AllocationType.GCHandle)
+                {
+                    ((GCHandle)AllocationHandle).Free();
+                    AllocationHandle = null;
+                    AllocationType = AllocationType.None;
+                }
+                else if (AllocationType == AllocationType.Marshal)
+                {
+                    Marshal.FreeHGlobal((IntPtr)AllocationHandle);
+                    AllocationHandle = null;
+                    AllocationType = AllocationType.None;
+                }
+                else if (AllocationType == AllocationType.FromPointer)
+                {
+                    AllocationHandle = null;
+                    AllocationType = AllocationType.None;
+                }
+                else
+                    throw new InvalidOperationException($"Tensor.AllocationHandle is not null ({AllocationHandle}) but AllocationType is not matched to a C# allocation type ({AllocationType}).");
+            }
 
-            if (AllocationType == AllocationType.GCHandle)
-            {
-                ((GCHandle)AllocationHandle).Free();
-                AllocationHandle = null;
-                AllocationType = AllocationType.None;
-            }
-            else if (AllocationType == AllocationType.Marshal)
-            {
-                Marshal.FreeHGlobal((IntPtr)AllocationHandle);
-                AllocationHandle = null;
-                AllocationType = AllocationType.None;
-            }
-            else
-                throw new InvalidOperationException($"Tensor.AllocationHandle is not null ({AllocationHandle}) but AllocationType is not matched to a C# allocation type ({AllocationType}).");
+            c_api.TF_DeleteTensor(handle);
         }
 
-        public virtual IntPtr ToPointer()
-            => _handle;
-
         public bool IsDisposed => _disposed;
-
-        // public int tensor_int_val { get; set; }
     }
 }

@@ -26,18 +26,6 @@ namespace Tensorflow
     /// </summary>
     public partial class ResourceVariable : BaseResourceVariable, IVariableV1
     {
-        Tensor _cached_value;
-        public string Device => handle.Device;
-#pragma warning disable CS0108 // Member hides inherited member; missing new keyword
-        public Graph Graph => handle.graph;
-#pragma warning restore CS0108 // Member hides inherited member; missing new keyword
-        public Operation op => handle.op;
-        public Tensor is_initialized_op { get; set; }
-
-        public ResourceVariable(IntPtr handle, IntPtr tensor) : base(handle, tensor)
-        {
-        }
-
         public ResourceVariable(object initial_value = null,
             bool trainable = true,
             List<string> collections = null,
@@ -90,8 +78,7 @@ namespace Tensorflow
             tf_with(ops.init_scope(), init_scope =>
             {
                 _in_graph_mode = !tf.Context.executing_eagerly();
-                var values = init_from_fn ? new object[0] : new object[] { initial_value };
-                tf_with(ops.name_scope(name, "Variable", values, skip_on_eager: false), scope =>
+                tf_with(ops.name_scope(name, "Variable", initial_value, skip_on_eager: false), scope =>
                 {
                     name = scope;
                     var handle_name = ops.name_from_scope_name(name);
@@ -115,19 +102,17 @@ namespace Tensorflow
                     tf_with(ops.name_scope("Initializer"), delegate
                     {
                         if (initial_value.GetType().GetInterface("IInitializer") != null)
-                            initial_value = ops.convert_to_tensor((initial_value as IInitializer).Apply(new InitializerArgs(shape, dtype: dtype)));
+                            _initial_value = ops.convert_to_tensor((initial_value as IInitializer).Apply(new InitializerArgs(shape, dtype: dtype)));
                         else
                         {
                             var value = init_from_fn ? (initial_value as Func<Tensor>)() : initial_value;
-                            initial_value = ops.convert_to_tensor(value,
+                            _initial_value = ops.convert_to_tensor(value,
                                 name: "initial_value",
                                 dtype: dtype);
                         }
                     });
-                    _shape = shape ?? (initial_value as Tensor).TensorShape;
-                    _initial_value = initial_value as Tensor;
 
-
+                    _shape = shape ?? _initial_value.TensorShape;
 
                     if (_in_graph_mode)
                     {
@@ -150,11 +135,10 @@ namespace Tensorflow
                           graph_mode: _in_graph_mode);
 
                         gen_resource_variable_ops.assign_variable_op(handle, _initial_value);
-                        is_initialized_op = null;
                         initializer_op = null;
                         _graph_element = null;
                         _dtype = _initial_value.dtype.as_base_dtype();
-                        initial_value = _in_graph_mode ? initial_value : null;
+                        // initial_value = _in_graph_mode ? initial_value : null;
                     }
 
                     base.__init__(trainable: trainable,
@@ -199,8 +183,6 @@ namespace Tensorflow
             {
                 prepend_name_scope = ops.prepend_name_scope(variable_def.SnapshotName, import_scope: import_scope);
                 var snapshot = g.as_graph_element(prepend_name_scope) as Tensor;
-                if (snapshot.op.type != "ReadVariableOp")
-                    _cached_value = snapshot;
                 while (snapshot.op.type != "ReadVariableOp")
                     snapshot = snapshot.op.inputs[0];
                 _graph_element = snapshot;

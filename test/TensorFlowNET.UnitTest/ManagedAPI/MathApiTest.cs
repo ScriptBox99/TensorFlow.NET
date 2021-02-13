@@ -6,7 +6,7 @@ using static Tensorflow.Binding;
 namespace TensorFlowNET.UnitTest.ManagedAPI
 {
     [TestClass]
-    public class MathApiTest : TFNetApiTest
+    public class MathApiTest : EagerModeTestBase
     {
         // A constant vector of size 6
         Tensor a = tf.constant(new float[] { 1.0f, -0.5f, 3.4f, -2.1f, 0.0f, -6.5f });
@@ -47,6 +47,15 @@ namespace TensorFlowNET.UnitTest.ManagedAPI
 
             var x5 = tf.reduce_sum(b, (0, 1));
             Assert.AreEqual(-4.7f, (float)x5);
+        }
+
+        [TestMethod]
+        public void Erf()
+        {
+            var erf = tf.math.erf(a, name: "erf");
+            var expected = new float[] { 0.8427007f, -0.5204999f, 0.99999845f, -0.9970206f, 0f, -1f };
+            var actual = erf.ToArray<float>();
+            Assert.IsTrue(Equal(expected, actual));
         }
     }
 }

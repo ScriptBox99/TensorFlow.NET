@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>Tensorflow</RootNamespace>
+    <AssemblyName>Tensorflow</AssemblyName>
+    <Platforms>AnyCPU;x64</Platforms>
+    <LangVersion>9.0</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TensorFlowNET.Recommenders\Tensorflow.Recommenders.csproj" />
+    <ProjectReference Include="..\TensorFlowNET.Text\Tensorflow.Text.csproj" />
+  </ItemGroup>
+
+</Project>

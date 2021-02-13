@@ -18,8 +18,10 @@ using NumSharp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Tensorflow.Keras.ArgsDefinition;
 using Tensorflow.Keras.Engine;
+using Tensorflow.Keras.Layers;
 using static Tensorflow.Binding;
 using static Tensorflow.KerasApi;
 
@@ -41,15 +43,13 @@ namespace Tensorflow.Keras.Utils
             Func<Tensor> init_val = () => args.Initializer.Apply(new InitializerArgs(args.Shape, dtype: args.DType));
 
             var variable_dtype = args.DType.as_base_dtype();
-            var v = tf.Variable(init_val,
+            return tf.Variable(init_val,
                 dtype: variable_dtype,
                 shape: args.Shape,
                 name: args.Name,
                 trainable: args.Trainable,
                 validate_shape: args.ValidateShape,
                 use_resource: args.UseResource);
-
-            return v;
         }
 
         /// <summary>
@@ -151,12 +151,13 @@ namespace Tensorflow.Keras.Utils
 
                     // recursively
                     CreateKerasHistoryHelper(layer_inputs, processed_ops, created_layers);
-                    var op_layer = new TensorFlowOpLayer(new TensorFlowOpLayerArgs
+                    var opLayerArgs = new TensorFlowOpLayerArgs
                     {
                         NodeDef = op.node_def,
                         Constants = constants,
                         Name = op.name
-                    });
+                    };
+                    var op_layer = new TensorFlowOpLayer(opLayerArgs);
                     created_layers.Add(op_layer);
                     op_layer.SetConnectivityMetadata(layer_inputs, op.outputs);
                     processed_ops.Add(op);

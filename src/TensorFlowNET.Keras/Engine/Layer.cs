@@ -120,15 +120,14 @@ namespace Tensorflow.Keras.Engine
         public void SetConnectivityMetadata(Tensors inputs, Tensors outputs)
             => _set_connectivity_metadata_(inputs, outputs);
 
-        private Tensors _set_connectivity_metadata_(Tensors inputs, Tensors outputs)
+        private void _set_connectivity_metadata_(Tensors inputs, Tensors outputs)
         {
-            new Node(this, new NodeArgs
+            var node = new Node(new NodeArgs
             {
                 InputTensors = inputs,
                 Outputs = outputs
             });
-
-            return outputs;
+            node.Connect(this);
         }
 
         private void _handle_activity_regularization(Tensors inputs, Tensors outputs)
@@ -156,7 +155,7 @@ namespace Tensorflow.Keras.Engine
         /// <param name="state"></param>
         /// <param name="is_training"></param>
         /// <returns></returns>
-        protected virtual Tensors Call(Tensors inputs, Tensor state = null, bool is_training = false)
+        protected virtual Tensors Call(Tensors inputs, Tensor state = null, bool? training = null)
         {
             throw new NotImplementedException("");
         }
@@ -176,14 +175,22 @@ namespace Tensorflow.Keras.Engine
 
             tf.init_scope();
 
-            tf.Context.eager_mode();
-            build(inputs.shape);
-            tf.Context.restore_mode();
+            bool need_restore_mode = false;
+            if (inputs.IsEagerTensor || tf.Context.is_build_function())
+            {
+                need_restore_mode = true;
+                tf.Context.eager_mode(isFunc: tf.Context.is_build_function());
+            }
+               
+            build(inputs);
+
+            if (need_restore_mode)
+                tf.Context.restore_mode();
 
             built = true;
         }
 
-        protected virtual void build(TensorShape input_shape)
+        protected virtual void build(Tensors inputs)
         {
             built = true;
         }
@@ -207,11 +214,11 @@ namespace Tensorflow.Keras.Engine
             }));
         }
 
-        protected virtual void add_update(Tensor[] updates, bool inputs = false)
+        /*protected virtual void add_update(Tensor[] updates, bool inputs = false)
         {
             var updates_op = updates.Select(x => x.op).ToArray();
             this.updates.AddRange(updates_op);
-        }
+        }*/
 
         // Determine layer name (non-unique).
         protected virtual void _init_set_name(string name, bool zero_based = true)
@@ -230,6 +237,21 @@ namespace Tensorflow.Keras.Engine
             if (Trainable)
                 return layer_utils.count_params(this, weights);
             return 0;
+        }
+        List<IVariableV1> ILayer.trainable_weights
+        {
+            get
+            {
+                return trainable_weights;
+            }
+        }
+
+        List<IVariableV1> ILayer.non_trainable_weights
+        {
+            get
+            {
+                return non_trainable_weights;
+            }
         }
 
         public List<IVariableV1> weights

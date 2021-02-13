@@ -15,6 +15,7 @@
 ******************************************************************************/
 
 using NumSharp;
+using NumSharp.Backends.Unmanaged;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -30,11 +31,6 @@ namespace Tensorflow
     [SuppressMessage("ReSharper", "InvokeAsExtensionMethod")]
     public partial class Tensor
     {
-        /// <summary>
-        ///     When Tensor was created from an object that is managed by C#'s GC - this will hold reference to prevent it from being collected.
-        /// </summary>
-        protected object AllocationReferenceHolder;
-
         /// <summary>
         ///     The handle that was used to allocate this tensor, dependent on <see cref="AllocationType"/>.
         /// </summary>
@@ -52,6 +48,11 @@ namespace Tensorflow
 
         public IntPtr TensorDataPointer => _handle == IntPtr.Zero ? IntPtr.Zero : TF_TensorData(_handle);
 
+        public Tensor()
+        {
+
+        }
+
         /// <summary>
         ///     Create a Tensor object from an existing TF handle
         /// </summary>
@@ -60,6 +61,9 @@ namespace Tensorflow
         {
             _handle = handle;
             //no need to set AllocationType = AllocationType.None;
+#if TRACK_TENSOR_LIFE
+            print($"New Tensor 0x{_handle.ToString("x16")} {AllocationType} String Data: 0x{TensorDataPointer.ToString("x16")}");
+#endif
         }
 
         public Tensor(int value)
@@ -453,54 +457,18 @@ namespace Tensorflow
         /// </summary>
         public unsafe Tensor(string str)
         {
-            var buffer = Encoding.UTF8.GetBytes(str);
-            var size = c_api.TF_StringEncodedSize((ulong)buffer.Length);
-            var handle = TF_AllocateTensor(TF_DataType.TF_STRING, null, 0, size + sizeof(ulong));
-            AllocationType = AllocationType.Tensorflow;
-
-            IntPtr tensor = c_api.TF_TensorData(handle);
-            Marshal.WriteInt64(tensor, 0);
-            fixed (byte* src = buffer)
-                c_api.TF_StringEncode(src, (ulong)buffer.Length, (byte*)(tensor + sizeof(long)), size, tf.Status.Handle);
-            _handle = handle;
-            tf.Status.Check(true);
+            _handle = StringTensor(new string[] { str }, TensorShape.Scalar);
+#if TRACK_TENSOR_LIFE
+            print($"New Tensor 0x{_handle.ToString("x16")} {AllocationType} String Data: 0x{TensorDataPointer.ToString("x16")}");
+#endif
         }
 
         public unsafe Tensor(string[] strings)
         {
-            // convert string array to byte[][]
-            var buffer = new byte[strings.Length][];
-            for (var i = 0; i < strings.Length; i++)
-                buffer[i] = Encoding.UTF8.GetBytes(strings[i]);
-            long[] shape = new long[] { strings.Length };
-
-            ulong size = 0;
-            foreach (var b in buffer)
-                size += TF_StringEncodedSize((ulong)b.Length);
-
-            ulong src_size = size + (ulong)buffer.Length * sizeof(ulong);
-            IntPtr handle = TF_AllocateTensor(TF_DataType.TF_STRING, shape, shape.Length, src_size);
-            AllocationType = AllocationType.Tensorflow;
-
-            // Clear offset table
-            IntPtr input = TF_TensorData(handle);
-            IntPtr data_start = input + buffer.Length * sizeof(ulong);
-            IntPtr limit = input + (int)src_size;
-            ulong offset = 0;
-            for (int i = 0; i < buffer.Length; i++)
-            {
-                Marshal.WriteInt64(input, i * sizeof(ulong), (long)offset);
-                fixed (byte* src = &buffer[i][0])
-                {
-                    var written = TF_StringEncode(src, (ulong)buffer[i].Length, (byte*)data_start, (ulong)(limit.ToInt64() - data_start.ToInt64()), tf.Status.Handle);
-                    tf.Status.Check(true);
-                    //input += 8;
-                    data_start += (int)written;
-                    offset += written;
-                }
-            }
-
-            _handle = handle;
+            _handle = StringTensor(strings, new TensorShape(strings.Length));
+#if TRACK_TENSOR_LIFE
+            print($"New Tensor 0x{_handle.ToString("x16")} {AllocationType} String Data: 0x{TensorDataPointer.ToString("x16")}");
+#endif
         }
 
         public unsafe Tensor(NDArray nd, TF_DataType? tensorDType = null)
@@ -509,12 +477,12 @@ namespace Tensorflow
                 tensorDType = nd.dtype.as_dtype();
 
             // todo: handle nd of type "String" here too
-            if (tensorDType == TF_DataType.TF_STRING && nd.typecode == NPTypeCode.Byte)
+            /*if (tensorDType == TF_DataType.TF_STRING && nd.typecode == NPTypeCode.Byte)
             {
                 if (nd.Unsafe.Storage.Shape.IsContiguous)
                 {
                     var bytesLength = (ulong)nd.size;
-                    var size = c_api.TF_StringEncodedSize(bytesLength);
+                    var size = bytesLength + 1;
                     var handle = TF_AllocateTensor(TF_DataType.TF_STRING, null, 0, size + 8);
                     AllocationType = AllocationType.Tensorflow;
 
@@ -528,7 +496,7 @@ namespace Tensorflow
                 else
                 {
                     var buffer = nd.ToArray<byte>();
-                    var size = c_api.TF_StringEncodedSize((ulong)buffer.Length);
+                    var size = (ulong)buffer.Length + 1;
                     var handle = TF_AllocateTensor(TF_DataType.TF_STRING, null, 0, size + 8);
                     AllocationType = AllocationType.Tensorflow;
 
@@ -543,35 +511,36 @@ namespace Tensorflow
                 }
 
                 return;
-            }
+            }*/
 
-            _handle = CreateTensorFromNDArray(nd, tensorDType);
+            CreateTensorFromNDArray(nd, tensorDType);
+#if TRACK_TENSOR_LIFE
+            print($"New Tensor 0x{_handle.ToString("x16")} {AllocationType} Data: 0x{TensorDataPointer.ToString("x16")}");
+#endif
         }
 
-        private unsafe IntPtr CreateTensorFromNDArray(NDArray nd, TF_DataType? given_dtype)
+        private unsafe void CreateTensorFromNDArray(NDArray nd, TF_DataType? given_dtype)
         {
             if (nd.typecode == NPTypeCode.String)
                 throw new NotImplementedException("Support for NDArray of type string not implemented yet");
 
             var arraySlice = nd.Unsafe.Storage.Shape.IsContiguous ? nd.GetData() : nd.CloneData();
 
-            var handle = TF_NewTensor(
+            _handle = TF_NewTensor(
                 given_dtype ?? nd.dtype.as_dtype(),
                 dims: nd.shape.Select(i => (long)i).ToArray(),
                 num_dims: nd.ndim,
                 data: arraySlice.Address,
                 len: (ulong)(nd.size * nd.dtypesize));
 
-            //if TF decided not to perform copy, hold reference for given NDArray.
-            if (TF_TensorData(handle).ToPointer() == arraySlice.Address)
+            // if TF decided not to perform copy, hold reference for given NDArray.
+            if (TensorDataPointer.ToPointer() == arraySlice.Address)
             {
                 AllocationType = AllocationType.FromPointer;
-                AllocationReferenceHolder = arraySlice;
+                AllocationHandle = arraySlice;
             }
             else
                 AllocationType = AllocationType.Tensorflow;
-
-            return handle;
         }
 
         public Tensor(Operation op, int value_index, TF_DataType dtype)
@@ -600,24 +569,8 @@ namespace Tensorflow
         protected IntPtr CreateTensorFromArray(TF_DataType dt, long[] shape, Array data, int element_size)
         {
             if (dt == TF_DataType.TF_STRING && data is byte[] buffer)
-                return CreateStringTensorFromBytes(buffer, shape);
+                return StringTensor(new byte[][] { buffer }, TensorShape.Scalar);
             return CreateTensorFromArray(dt, shape, data, 0, data.Length, element_size);
-        }
-
-        protected unsafe IntPtr CreateStringTensorFromBytes(byte[] buffer, long[] shape)
-        {
-            var size = c_api.TF_StringEncodedSize((ulong)buffer.Length);
-            var handle = TF_AllocateTensor(TF_DataType.TF_STRING, shape, 0, size + sizeof(long));
-            AllocationType = AllocationType.Tensorflow;
-
-            IntPtr tensor = c_api.TF_TensorData(handle);
-            Marshal.WriteInt64(tensor, 0);
-
-            fixed (byte* src = buffer)
-                c_api.TF_StringEncode(src, (ulong)buffer.Length, (byte*)(tensor + sizeof(long)), size, tf.Status.Handle);
-
-            tf.Status.Check(true);
-            return handle;
         }
 
         /// <summary>

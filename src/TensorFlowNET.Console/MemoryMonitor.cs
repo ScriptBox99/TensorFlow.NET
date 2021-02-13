@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using NumSharp;
 using static Tensorflow.Binding;
+using static Tensorflow.KerasApi;
 
 namespace Tensorflow
 {
@@ -8,29 +12,44 @@ namespace Tensorflow
     {
         public void WarmUp()
         {
+            TensorShape shape = (1, 32, 32, 3);
+            np.arange(shape.size).astype(np.float32).reshape(shape.dims);
+
             print($"tensorflow native version: v{tf.VERSION}");
+            tf.Context.ensure_initialized();
+            var a = tf.constant(np.ones(10, 10));
+            var b = tf.Variable(a);
+            var c = tf.Variable(b);
+            var d = b * c;
+            print(d.numpy());
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
         }
 
-        public void Execute(int epoch, int iterate, Action<int> process)
+        public void Execute(int epoch, int iterate, Action<int, int> process)
         {
-            /*GC.Collect();
+            GC.Collect();
             GC.WaitForPendingFinalizers();
-            GC.Collect();*/
-
+            var initialTotalMemory = Process.GetCurrentProcess().PrivateMemorySize64;
             print($"{process.Method.Name} started...");
+
             for (int i = 0; i < epoch; i++)
             {
-                var initialMemory = Process.GetCurrentProcess().PrivateMemorySize64;// GC.GetTotalMemory(true);
-                process(iterate);
-                var finalMemory = Process.GetCurrentProcess().PrivateMemorySize64; //GC.GetTotalMemory(true);
+                var initialMemory = Process.GetCurrentProcess().PrivateMemorySize64;
+                for (int j = 0; j < iterate; j++)
+                    process(i, j);
+
+                keras.backend.clear_session();
+
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                var finalMemory = Process.GetCurrentProcess().PrivateMemorySize64;
                 print($"Epoch {i}: {Format(finalMemory - initialMemory)}.");
             }
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-
-            print($"Total {process.Method.Name} usage {Format(Process.GetCurrentProcess().PrivateMemorySize64)}");
+            var finalTotalMemory = Process.GetCurrentProcess().PrivateMemorySize64;
+            print($"Memory usage difference: {Format(finalTotalMemory - initialTotalMemory)} / {Format(Process.GetCurrentProcess().PrivateMemorySize64)}");
         }
 
         private string Format(long usage)

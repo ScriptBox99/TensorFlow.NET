@@ -14,6 +14,7 @@
    limitations under the License.
 ******************************************************************************/
 
+using System;
 using System.Linq;
 using Tensorflow.Contexts;
 using static Tensorflow.Binding;
@@ -41,23 +42,17 @@ namespace Tensorflow.Eager
             int num_outputs)
         {
             var status = tf.Status;
-            var op = GetOp(ctx, op_name, status);
-            status.Check(true);
+            using var op = GetOp(ctx, op_name, status);
             c_api.TFE_OpSetDevice(op, device_name, status.Handle);
             if (status.ok())
             {
                 for (int i = 0; i < inputs.Length; ++i)
                 {
-                    SafeTensorHandleHandle tensor_handle;
-                    switch (inputs[i])
+                    SafeTensorHandleHandle tensor_handle = inputs[i] switch
                     {
-                        case EagerTensor et:
-                            tensor_handle = et.EagerTensorHandle;
-                            break;
-                        default:
-                            tensor_handle = c_api.TFE_NewTensorHandle(inputs[i], status.Handle);
-                            break;
-                    }
+                        EagerTensor et => et.EagerTensorHandle,
+                        _ => throw new NotImplementedException("")
+                    };
                     c_api.TFE_OpAddInput(op, tensor_handle, status.Handle);
                     status.Check(true);
                 }

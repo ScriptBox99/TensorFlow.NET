@@ -41,7 +41,7 @@ namespace Tensorflow.Keras
             int num_channels = 0;
             if (color_mode == "rgb")
                 num_channels = 3;
-            // C:/Users/haipi/.keras/datasets/flower_photos
+            
             var (image_paths, label_list, class_name_list) = keras.preprocessing.dataset_utils.index_directory(directory,
                 formats: WHITELIST_FORMATS,
                 class_names: class_names,
@@ -56,6 +56,21 @@ namespace Tensorflow.Keras
                 dataset = dataset.shuffle(batch_size * 8, seed: seed);
             dataset = dataset.batch(batch_size);
             return dataset;
+        }
+
+        public IDatasetV2 text_dataset_from_directory(string directory,
+            string labels = "inferred",
+            string label_mode = "int",
+            string[] class_names = null,
+            int batch_size = 32,
+            bool shuffle = true,
+            int? seed = null,
+            float validation_split = 0.2f,
+            string subset = null)
+        {
+           
+
+            return null;
         }
     }
 }

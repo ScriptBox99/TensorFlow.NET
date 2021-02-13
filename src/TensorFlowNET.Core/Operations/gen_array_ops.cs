@@ -14,6 +14,7 @@
    limitations under the License.
 ******************************************************************************/
 
+using System;
 using System.Linq;
 using Tensorflow.Contexts;
 using static Tensorflow.Binding;
@@ -174,11 +175,12 @@ namespace Tensorflow
         {
             if (tf.Context.executing_eagerly())
             {
-                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                /*var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
                     "Pad", name,
                     null,
                     input, paddings);
-                return results[0];
+                return results[0];*/
+                return pad_eager_fallback(input, paddings, name: name, ctx: tf.Context);
             }
 
             var _op = tf.OpDefLib._apply_op_helper("Pad", name: name, args: new { input, paddings });
@@ -186,21 +188,28 @@ namespace Tensorflow
             return _op.output;
         }
 
-        public static Tensor pack(Tensor[] values, int axis = 0, string name = null)
+        private static Tensor pad_eager_fallback(Tensor inputs, Tensor padding, string name = null, Context ctx = null)
         {
-            if (tf.Context.executing_eagerly())
-            {
-                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+            var (_attr_T, input) = tf.Runner.ArgsToMatchingEager(ctx, args: new[] { inputs });
+            var (_attr_Tpaddings, paddings) = tf.Runner.ArgsToMatchingEager(ctx, default_dtype: tf.int32, args: new[] { padding });
+            var _inputs_flat = input.concat(paddings);
+            var _attrs = new object[] { "T", _attr_T, "Tpaddings", _attr_Tpaddings };
+
+            var results = tf.Runner.Execute(ctx, "Pad", 1, _inputs_flat, _attrs, name: name);
+            if (tf.Runner.MustRecordGradient())
+                tf.Runner.RecordGradient("Pad", _inputs_flat, _attrs, results);
+            return results[0];
+        }
+
+        public static Tensor pack(Tensor[] values, int axis = 0, string name = null)
+            => tf.Context.RunInAutoMode(()
+                => tf.OpDefLib._apply_op_helper("Pack", name, new { values, axis }).output, ()
+                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
                     "Pack", name,
                     null,
                     values,
-                    "axis", axis);
-                return results[0];
-            }
-
-            var _op = tf.OpDefLib._apply_op_helper("Pack", name: name, args: new { values, axis });
-            return _op.output;
-        }
+                    "axis", axis).FirstOrDefault(),
+                values, axis);
 
         /// <summary>
         /// Return a tensor with the same shape and contents as the input tensor or value.
@@ -220,6 +229,14 @@ namespace Tensorflow
             }
 
             var _op = tf.OpDefLib._apply_op_helper("Identity", name, new { input });
+            
+            if (tf.Runner.MustRecordGradient())
+            {
+                tf.Runner.RecordGradient("Identity", _op.inputs, new object[] 
+                {
+                    "T", _op.get_attr<TF_DataType>("T")
+                }, _op.outputs);
+            }                
 
             return _op.output;
         }
@@ -315,12 +332,39 @@ namespace Tensorflow
                     "Reshape", name,
                     null,
                     tensor, shape).FirstOrDefault(),
-                tensor);
+                tensor, shape);
 
-        public static Tensor reshape(Tensor tensor, int[] shape, string name = null)
+        public static Tensor reshape(Tensor tensor, object[] shape, string name = null)
         {
-            var _op = tf.OpDefLib._apply_op_helper("Reshape", name, new { tensor, shape });
-            return _op.outputs[0];
+            try
+            {
+                return tf.Context.RunInAutoMode(()
+                     => tf.OpDefLib._apply_op_helper("Reshape", name, new { tensor, shape }).output, ()
+                     => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                         "Reshape", name,
+                         null,
+                         tensor, shape).FirstOrDefault(),
+                     tensor, shape);
+            }
+            catch (InvalidArgumentError ex)
+            {
+                return reshape_eager_fallback(tensor, shape, name, tf.Context);
+            }
+        }
+
+        private static Tensor reshape_eager_fallback(Tensor tensor, object[] shape, string name, Context ctx)
+        {
+            var (_attr_T, _input) = tf.Runner.ArgsToMatchingEager(ctx, args: new[] { tensor });
+            var (_attr_Tshape, _input_shape) = tf.Runner.ArgsToMatchingEager(ctx, args: new object[] { shape }, default_dtype: TF_DataType.TF_INT32);
+            var _inputs_flat = new[] { _input[0], _input_shape[0] };
+            var _attrs = new object[] { "T", _attr_T, "Tshape", _attr_Tshape };
+
+            var results = tf.Runner.Execute(ctx, "Reshape", 1, _inputs_flat, _attrs, name: name);
+            if (tf.Runner.MustRecordGradient())
+            {
+                tf.Runner.RecordGradient("Reshape", _inputs_flat, _attrs, results);
+            }
+            return results[0];
         }
 
         /// <summary>
@@ -400,6 +444,21 @@ namespace Tensorflow
             var _op = tf.OpDefLib._apply_op_helper("Select", name, new { condition, t = x, e = y });
             return _op.outputs[0];
         }
+        public static Tensor select_v2<Tx, Ty>(Tensor condition, Tx x, Ty y, string name = null)
+        {
+            if (tf.Context.executing_eagerly())
+            {
+                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "SelectV2", name,
+                    null,
+                    condition, x, y);
+
+                return results[0];
+            }
+
+            var _op = tf.OpDefLib._apply_op_helper("SelectV2", name, new { condition, t = x, e = y });
+            return _op.outputs[0];
+        }
 
         public static Tensor scatter_nd(Tensor indices, Tensor updates, Tensor[] shape, string name = null)
         {
@@ -448,30 +507,76 @@ namespace Tensorflow
             return _op.outputs[0];
         }
 
-        /// <summary>
-        /// Return a slice from 'input'
-        /// </summary>
-        /// <param name="input"></param>
-        /// <param name="begin"></param>
-        /// <param name="size"></param>
-        /// <param name="name"></param>
-        /// <returns></returns>
-        public static Tensor slice(Tensor input, Tensor begin, Tensor size, string name = null)
+        public static Tensor slice(Tensor input, Tensor[] begin, Tensor[] size, string name = null)
+        {
+            if (tf.executing_eagerly())
+            {
+                var result = slice_eager_fallback(input, begin, size, name, tf.Context);
+                return result;
+            }
+
+            var _op = tf.OpDefLib._apply_op_helper("Slice", name, new { input, begin, size });
+            return _op.outputs[0];
+        }
+
+        private static Tensor slice_eager_fallback(Tensor inputs, Tensor[] begin, Tensor[] size, string name, Context ctx)
+        {
+            var (_attr_T, input) = tf.Runner.ArgsToMatchingEager(ctx, args: new[] { inputs });
+            var (_attr_Tidx, _inputs_Index) = tf.Runner.ArgsToMatchingEager(ctx, args: new object[] { begin, size });
+            var _inputs_flat = input.concat(_inputs_Index);
+            var _attrs = new object[] { "T", _attr_T, "Index", _attr_Tidx };
+
+            var results = tf.Runner.Execute(ctx, "Slice", 1, _inputs_flat, _attrs, name: name);
+            if (tf.Runner.MustRecordGradient())
+            {
+                tf.Runner.RecordGradient("Slice", _inputs_flat, _attrs, results);
+            }
+            return results[0];
+        }
+
+        public static Tensor slice<Tb, Ts>(Tensor input, Tb begin, Ts size, string name = null)
         {
             var _op = tf.OpDefLib._apply_op_helper("Slice", name, new { input, begin, size });
             return _op.outputs[0];
         }
 
-        public static Tensor tile<T>(Tensor input, T multiples, string name = null)
+        public static Tensor[] split_v(Tensor value, Tensor size_splits, 
+            int axis, int num_split, string name = null)
+        {
+            if (tf.executing_eagerly())
+            {
+                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "SplitV", name,
+                    null,
+                    value, size_splits, axis,
+                    "num_split", num_split);
+
+                return results;
+            }
+
+            var _op = tf.OpDefLib._apply_op_helper("SplitV", name, new { split_dim = axis, value, num_split });
+            return _op.outputs;
+        }
+
+        public static Tensor tile(Tensor input, Tensor multiples, string name = null)
             => tf.Context.RunInAutoMode(()
                 => tf.OpDefLib._apply_op_helper("Tile", name, new { input, multiples }).output, ()
                 => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
                     "Tile", name,
                     null,
                     input, multiples).FirstOrDefault(),
-                input);
+                input, multiples);
 
-        public static Tensor transpose<T1, T2>(T1 x, T2 perm, string name = null)
+        public static Tensor tile(Tensor input, object[] multiples, string name = null)
+            => tf.Context.RunInAutoMode(()
+                => tf.OpDefLib._apply_op_helper("Tile", name, new { input, multiples }).output, ()
+                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "Tile", name,
+                    null,
+                    input, multiples).FirstOrDefault(),
+                input, multiples);
+
+        public static Tensor transpose<T1>(Tensor x, T1 perm, string name = null)
         {
             if (tf.Context.executing_eagerly())
             {
@@ -485,6 +590,15 @@ namespace Tensorflow
             var _op = tf.OpDefLib._apply_op_helper("Transpose", name, new { x, perm });
             return _op.outputs[0];
         }
+
+        public static Tensor ones_like(Tensor x, string name = null)
+            => tf.Context.RunInAutoMode(()
+                => tf.OpDefLib._apply_op_helper("OnesLike", name, new { x }).output, ()
+                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "OnesLike", name,
+                    null,
+                    x).FirstOrDefault(),
+                x);
 
         public static Tensor zeros_like(Tensor x, string name = null)
             => tf.Context.RunInAutoMode(()
@@ -503,11 +617,11 @@ namespace Tensorflow
         }
 
         public static Tensor strided_slice(Tensor input, Tensor begin, Tensor end, Tensor strides,
-            int begin_mask = 0,
-            int end_mask = 0,
-            int ellipsis_mask = 0,
-            int new_axis_mask = 0,
-            int shrink_axis_mask = 0,
+            long begin_mask = 0,
+            long end_mask = 0,
+            long ellipsis_mask = 0,
+            long new_axis_mask = 0,
+            long shrink_axis_mask = 0,
             string name = null)
             => tf.Context.RunInAutoMode(()
                 => tf.OpDefLib._apply_op_helper("StridedSlice", name, new
@@ -533,6 +647,30 @@ namespace Tensorflow
                     "shrink_axis_mask", shrink_axis_mask).FirstOrDefault(),
                 input, begin, end, strides);
 
+        public static Operation resource_strided_slice_assign(Tensor input, Tensor begin, Tensor end, Tensor strides, Tensor value,
+            int begin_mask = 0,
+            int end_mask = 0,
+            int ellipsis_mask = 0,
+            int new_axis_mask = 0,
+            int shrink_axis_mask = 0,
+            string name = null)
+            => tf.Context.RunInAutoMode(()
+                => tf.OpDefLib._apply_op_helper("ResourceStridedSliceAssign", name, new
+                {
+                    input, begin, end, strides, value,
+                    begin_mask, end_mask, ellipsis_mask, new_axis_mask, shrink_axis_mask
+                }).output, ()
+                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "ResourceStridedSliceAssign", name,
+                    null,
+                    input, begin, end, strides, value,
+                    "begin_mask", begin_mask,
+                    "end_mask", end_mask,
+                    "ellipsis_mask", ellipsis_mask,
+                    "new_axis_mask", new_axis_mask,
+                    "shrink_axis_mask", shrink_axis_mask).FirstOrDefault(),
+                input, begin, end, strides, value);
+
         public static Tensor strided_slice<T>(Tensor input, T[] begin, T[] end, T[] strides,
             int begin_mask = 0,
             int end_mask = 0,
@@ -554,60 +692,6 @@ namespace Tensorflow
                 shrink_axis_mask
             });
 
-            return _op.outputs[0];
-        }
-
-        /// <summary>
-        /// Returns the gradient of `StridedSlice`.
-        /// 
-        /// Since `StridedSlice` cuts out pieces of its `input` which is size
-        /// `shape`, its gradient will have the same shape (which is passed here
-        /// as `shape`). The gradient will be zero in any element that the slice
-        /// does not select.
-        /// </summary>
-        /// <param name="shape">Must be one of the following types: `int32`, `int64`.</param>
-        /// <param name="begin">Must have the same type as `shape`.</param>
-        /// <param name="end">Must have the same type as `shape`.</param>
-        /// <param name="strides">Must have the same type as `shape`.</param>
-        /// <param name="dy">A `Tensor`.</param>
-        /// <param name="begin_mask">An optional `int`. Defaults to `0`.</param>
-        /// <param name="end_mask">An optional `int`. Defaults to `0`.</param>
-        /// <param name="ellipsis_mask">An optional `int`. Defaults to `0`.</param>
-        /// <param name="new_axis_mask">An optional `int`. Defaults to `0`.</param>
-        /// <param name="shrink_axis_mask">An optional `int`. Defaults to `0`.</param>
-        /// <param name="name">A name for the operation (optional).</param>
-        /// <returns>A `Tensor`. Has the same type as `dy`.</returns>
-        public static Tensor strided_slice_grad(Tensor shape, Tensor begin, Tensor end, Tensor strides, Tensor dy,
-            int begin_mask = 0, int end_mask = 0, int ellipsis_mask = 0, int new_axis_mask = 0,
-            int shrink_axis_mask = 0, string name = null)
-            => tf.Context.RunInAutoMode(()
-                => tf.OpDefLib._apply_op_helper("StridedSliceGrad", name, new
-                {
-                    shape,
-                    begin,
-                    end,
-                    strides,
-                    dy,
-                    begin_mask,
-                    end_mask,
-                    ellipsis_mask,
-                    new_axis_mask,
-                    shrink_axis_mask
-                }).output, ()
-                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
-                    "StridedSliceGrad", name,
-                    null,
-                    shape, begin, end, strides, dy,
-                    "begin_mask", begin_mask,
-                    "end_mask", end_mask,
-                    "ellipsis_mask", ellipsis_mask,
-                    "new_axis_mask", new_axis_mask,
-                    "shrink_axis_mask", shrink_axis_mask).FirstOrDefault(),
-                shape, begin, end, strides, dy);
-
-        public static Tensor slice<Tb, Ts>(Tensor input, Tb begin, Ts size, string name = null)
-        {
-            var _op = tf.OpDefLib._apply_op_helper("Slice", name, new { input, begin, size });
             return _op.outputs[0];
         }
 

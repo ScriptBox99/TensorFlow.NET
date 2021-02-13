@@ -10,9 +10,9 @@ namespace Tensorflow.Keras.Engine
         /// </summary>
         /// <param name="input"></param>
         /// <param name="state"></param>
-        /// <param name="is_training"></param>
+        /// <param name="training"></param>
         /// <returns></returns>
-        public Tensors Apply(Tensors inputs, Tensor state = null, bool is_training = false)
+        public Tensors Apply(Tensors inputs, Tensor state = null, bool training = false)
         {
             callContext = callContext ?? new ThreadLocal<CallContext>()
             {
@@ -25,7 +25,7 @@ namespace Tensorflow.Keras.Engine
             Tensors outputs = null;
 
             var eager = tf.executing_eagerly();
-            using var ctxManager = CallContext.enter();
+            using var ctxManager = CallContext.enter(build_graph: false);
 
             string nameScope = "";
             if (eager)
@@ -33,23 +33,18 @@ namespace Tensorflow.Keras.Engine
             else
                 nameScope = _name_scope();
 
-            if (!inputs.IsEagerTensor)
-                tf.Context.graph_mode();
-
             tf_with(ops.name_scope(nameScope), scope =>
             {
                 if (!built)
                     MaybeBuild(inputs);
 
-                outputs = Call(inputs, state: state, is_training: is_training);
+                outputs = Call(inputs, state: state, training: training);
 
-                outputs = _set_connectivity_metadata_(inputs, outputs);
+                // memory leak
+                // _set_connectivity_metadata_(inputs, outputs);
                 _handle_activity_regularization(inputs, outputs);
                 _set_mask_metadata(inputs, outputs, null);
             });
-
-            if (!inputs.IsEagerTensor)
-                tf.Context.restore_mode();
 
             return outputs;
         }

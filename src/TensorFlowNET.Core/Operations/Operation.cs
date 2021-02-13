@@ -168,7 +168,7 @@ namespace Tensorflow
             if (op_def == null)
                 op_def = g.GetOpDef(node_def.Op);
 
-            (_handle, OpDesc) = ops._create_c_op(g, node_def, inputs, control_input_ops.ToArray());
+            (_handle, OpDesc) = ops._create_c_op(g, node_def, inputs, control_input_ops.ToArray(), op_def);
             _is_stateful = op_def.IsStateful;
 
             // Initialize self._outputs.
@@ -218,6 +218,8 @@ namespace Tensorflow
             {
                 case nameof(Int32):
                     return x.List.I.Select(x => (T)Convert.ChangeType(x, typeof(T))).ToArray();
+                case nameof(Int64):
+                    return x.List.I.Select(x => (T)Convert.ChangeType(x, typeof(T))).ToArray();
                 default:
                     return null;
             }
@@ -240,16 +242,17 @@ namespace Tensorflow
             if (string.IsNullOrEmpty(oneof_value))
                 return null;
 
-            if (oneof_value == "list")
-                throw new NotImplementedException($"Unsupported field type in {x.ToString()}");
-
-            if (string.Equals("type", oneof_value, StringComparison.OrdinalIgnoreCase))
-                return x.Type;
-
-            object result = x.GetType().GetProperty(oneof_value).GetValue(x);
-            if (result is Google.Protobuf.ByteString byteString)
-                return byteString.ToStringUtf8();
-            return result;
+            switch (oneof_value.ToLower())
+            {
+                case "list":
+                    throw new NotImplementedException($"Unsupported field type in {oneof_value}");
+                case "type":
+                    return x.Type;
+                case "s":
+                    return x.S.ToStringUtf8();
+                default:
+                    return x.GetType().GetProperty(oneof_value).GetValue(x);
+            }
         }
 
         public TF_AttrMetadata GetAttributeMetadata(string attr_name, Status s)

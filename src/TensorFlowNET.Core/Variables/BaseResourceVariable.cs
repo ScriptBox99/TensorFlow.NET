@@ -1,5 +1,7 @@
 ﻿using NumSharp;
 using System;
+using Tensorflow.Eager;
+using Tensorflow.Variables;
 using static Tensorflow.Binding;
 
 namespace Tensorflow
@@ -22,7 +24,6 @@ namespace Tensorflow
         public bool trainable => _trainable;
 
         protected Tensor _initial_value;
-        public Tensor initial_value => _initial_value;
 
         public Operation initializer => initializer_op;
 
@@ -43,15 +44,11 @@ namespace Tensorflow
         public Operation Initializer => initializer_op;
         public Operation Op => handle.op;
         public Graph Graph => handle.graph;
-        public string Device => "";
+        public string Device => handle.Device;
+        EagerResourceDeleter eager_resource_deleter;
 
         public BaseResourceVariable()
         {
-        }
-
-        public BaseResourceVariable(IntPtr handle, IntPtr tensor)
-        {
-            _handle = handle;
         }
 
         public void __init__(bool trainable = true,
@@ -66,7 +63,24 @@ namespace Tensorflow
             this.handle = handle;
             _name = name;
 
-            // handle_deleter
+            // After the handle has been created, set up a way to clean it up when
+            // executing eagerly. We'll hold the only reference to the deleter, so that
+            // when this object is garbage collected the deleter will be too. This
+            // means ResourceVariables can be part of reference cycles without those
+            // cycles being uncollectable.
+            if (handle.IsEagerTensor)
+            {
+                _handle = handle.EagerTensorHandle.DangerousGetHandle();
+                eager_resource_deleter = new EagerResourceDeleter(handle, handle.Device);
+            }
+            else
+            {
+                _handle = handle;
+            }
+
+#if TRACK_TENSOR_LIFE
+            print($"Created Resource 0x{_handle.ToString("x16")} {_name}");
+#endif
         }
 
         public Tensor assign<T>(T value, bool use_locking = false, string name = null, bool read_value = true)
@@ -82,10 +96,39 @@ namespace Tensorflow
             var value_tensor = ops.convert_to_tensor(value, dtype: dtype);
             var assign_op = gen_resource_variable_ops.assign_variable_op(
                 handle, value_tensor, name: name);
+
             if (read_value)
                 return gen_resource_variable_ops.read_variable_op(handle, dtype);
-            // return _lazy_read(assign_op, value_tensor);
+
+            if (assign_op == null)
+                return null;
+
             return assign_op;
+        }
+
+        public void StridedSliceAssign(Tensor value, ParsedSliceArgs slice)
+        {
+            _strided_slice_assign(slice.PackedBegin, slice.PackedEnd, slice.PackedStrides, value);
+        }
+
+        void _strided_slice_assign(Tensor begin, Tensor end, Tensor strides, Tensor value, string name = null,
+            int begin_mask = 0, int end_mask = 0, int ellipsis_mask = 0, int new_axis_mask = 0, int shrink_axis_mask = 0)
+        {
+            var op = gen_array_ops.resource_strided_slice_assign(handle, begin, end, strides, value,
+                begin_mask: begin_mask,
+                end_mask: end_mask,
+                ellipsis_mask: ellipsis_mask,
+                new_axis_mask: new_axis_mask,
+                shrink_axis_mask: shrink_axis_mask);
+        }
+
+        public IVariableV1 assign_lazy_load(Tensor value, string name = null)
+        {
+            var value_tensor = ops.convert_to_tensor(value, dtype: dtype);
+            var assign_op = gen_resource_variable_ops.assign_variable_op(
+                handle, value_tensor, name: name);
+            var variable = _lazy_read(assign_op, value_tensor);
+            return variable;
         }
 
         public Tensor value()
@@ -111,7 +154,7 @@ namespace Tensorflow
             return result;
         }
 
-        BaseResourceVariable _lazy_read(Operation op, Tensor value)
+        IVariableV1 _lazy_read(Operation op, Tensor value)
         {
             variable_accessed(this);
             return new _UnreadVariable(handle, _dtype, _shape, _in_graph_mode, _unique_id);
@@ -136,12 +179,15 @@ namespace Tensorflow
         /// read the value only after some condition is true.
         /// </summary>
         /// <returns></returns>
-        Tensor read_value()
-            => tf_with(ops.name_scope("Read"), delegate
-            {
-                var value = _read_variable_op();
-                return array_ops.identity(value);
+        protected Tensor read_value()
+        {
+            var value = tf_with(ops.name_scope("Read"), delegate
+            { 
+                return _read_variable_op(); 
             });
+            return array_ops.identity(value);
+        }
+            
 
         public Tensor assign_add<T>(T delta, bool use_locking = false, string name = null, bool read_value = true)
         {
@@ -152,6 +198,25 @@ namespace Tensorflow
                 return gen_resource_variable_ops.read_variable_op(handle, dtype);
             // return _lazy_read(assign_add_op);
             return assign_add_op;
+        }
+
+        public Tensor assign_sub<T>(T delta, bool use_locking = false, string name = null, bool read_value = true)
+        {
+            var assign_sub_op = gen_resource_variable_ops.assign_sub_variable_op(Handle,
+                ops.convert_to_tensor(delta, dtype: dtype), name: name);
+
+            if (read_value)
+                return gen_resource_variable_ops.read_variable_op(handle, dtype);
+            // return _lazy_read(assign_add_op);
+            return assign_sub_op;
+        }
+
+        public IVariableV1 assign_sub_lazy_load(Tensor delta, string name = null)
+        {
+            var assign_sub_op = gen_resource_variable_ops.assign_sub_variable_op(Handle,
+                ops.convert_to_tensor(delta, dtype: dtype), name: name);
+
+            return _lazy_read(assign_sub_op, delta);
         }
 
         public override string ToString()
@@ -166,6 +231,9 @@ namespace Tensorflow
 
         protected override void DisposeUnmanagedResources(IntPtr handle)
         {
+#if TRACK_TENSOR_LIFE
+            print($"Deleted Resource 0x{handle.ToString("x16")} {_name}");
+#endif
         }
 
         public Tensor AsTensor(TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool as_ref = false)

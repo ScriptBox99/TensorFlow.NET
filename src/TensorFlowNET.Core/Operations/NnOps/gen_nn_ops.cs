@@ -171,7 +171,7 @@ namespace Tensorflow.Operations
         }
 
         public static Tensor bias_add(Tensor value,
-            Tensor bias,
+            IVariableV1 bias,
             string data_format = null,
             string name = null)
         {
@@ -269,21 +269,29 @@ namespace Tensorflow.Operations
         }
 
         public static Tensor[] fused_batch_norm_grad_v3(FusedBatchNormParams @params)
-        {
-            var op = tf.OpDefLib._apply_op_helper("FusedBatchNormGradV3", name: @params.Name, args: new
-            {
-                y_backprop = @params.YBackprop,
-                x = @params.X,
-                scale = @params.Scale,
-                reserve_space_1 = @params.ReserveSpace1,
-                reserve_space_2 = @params.ReserveSpace2,
-                reserve_space_3 = @params.ReserveSpace3,
-                epsilon = @params.Epsilon,
-                data_format = @params.DataFormat,
-                is_training = @params.IsTraining
-            });
-            return op.outputs;
-        }
+            => tf.Context.RunInAutoMode(()
+                => tf.OpDefLib._apply_op_helper("FusedBatchNormGradV3", name: @params.Name,
+                    args: new 
+                    {
+                        y_backprop = @params.YBackprop,
+                        x = @params.X,
+                        scale = @params.Scale,
+                        reserve_space_1 = @params.ReserveSpace1,
+                        reserve_space_2 = @params.ReserveSpace2,
+                        reserve_space_3 = @params.ReserveSpace3,
+                        epsilon = @params.Epsilon,
+                        data_format = @params.DataFormat,
+                        is_training = @params.IsTraining
+                    }).outputs, ()
+                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "FusedBatchNormGradV3", @params.Name,
+                    null,
+                    @params.YBackprop, @params.X, @params.Scale,
+                    @params.ReserveSpace1, @params.ReserveSpace2, @params.ReserveSpace3,
+                    "epsilon", @params.Epsilon, 
+                    "data_format", @params.DataFormat, 
+                    "is_training", @params.IsTraining),
+                @params.YBackprop);
 
         public static Tensor[] fused_batch_norm(Tensor x,
                 Tensor scale,
@@ -310,15 +318,16 @@ namespace Tensorflow.Operations
             return _op.outputs;
         }
 
-        public static Tensor[] fused_batch_norm_v3(Tensor x,
-        Tensor scale,
-        Tensor offset,
-        Tensor mean,
-        Tensor variance,
-        float epsilon = 0.0001f,
-        string data_format = "NHWC",
-        bool is_training = true,
-        string name = null)
+        public static Tensors fused_batch_norm_v3(Tensor x,
+            IVariableV1 scale,
+            IVariableV1 offset,
+            IVariableV1 mean,
+            IVariableV1 variance,
+            float epsilon = 0.0001f,
+            float exponential_avg_factor = 1.0f,
+            string data_format = "NHWC",
+            bool is_training = true,
+            string name = null)
         {
             if (tf.executing_eagerly())
             {
@@ -331,6 +340,7 @@ namespace Tensorflow.Operations
                     mean,
                     variance,
                     "epsilon", epsilon,
+                    "exponential_avg_factor", exponential_avg_factor,
                     "data_format", data_format,
                     "is_training", is_training);
 
@@ -378,14 +388,14 @@ namespace Tensorflow.Operations
         }
 
         public static Tensor log_softmax(Tensor logits, string name = null)
-        {
-            var _op = tf.OpDefLib._apply_op_helper("LogSoftmax", name: name, args: new
-            {
-                logits
-            });
-
-            return _op.output;
-        }
+            => tf.Context.RunInAutoMode(()
+                => tf.OpDefLib._apply_op_helper("LogSoftmax", name: name,
+                    args: new { logits }).output, ()
+                => tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "LogSoftmax", name,
+                    null,
+                    logits).FirstOrDefault(),
+                logits);
 
         /// <summary>
         /// Says whether the targets are in the top `K` predictions.
@@ -521,6 +531,17 @@ namespace Tensorflow.Operations
 
         public static Tensor leaky_relu_grad(Tensor gradients, Tensor features, float alpha = 0.2f, string name = null)
         {
+            if (tf.executing_eagerly())
+            {
+                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "LeakyReluGrad", name,
+                    null,
+                    gradients, features,
+                    "alpha", alpha);
+
+                return results[0];
+            }
+
             var _op = tf.OpDefLib._apply_op_helper("LeakyReluGrad", name: name, args: new
             {
                 gradients,
@@ -560,6 +581,16 @@ namespace Tensorflow.Operations
         /// <returns></returns>
         public static (Tensor, Tensor) softmax_cross_entropy_with_logits(Tensor features, Tensor labels, string name = null)
         {
+            if (tf.executing_eagerly())
+            {
+                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
+                    "SoftmaxCrossEntropyWithLogits", name,
+                    null,
+                    features, labels);
+
+                return (results[0], results[1]);
+            }
+
             var _op = tf.OpDefLib._apply_op_helper("SoftmaxCrossEntropyWithLogits", name: name, args: new
             {
                 features,

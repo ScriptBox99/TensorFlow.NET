@@ -46,11 +46,11 @@ namespace Tensorflow.Eager
             op_exec_info.run_callbacks = op_exec_info.run_gradient_callback || op_exec_info.run_post_exec_callbacks;
 
             var status = tf.Status;
-            var op = GetOp(ctx, opName, status);
+            using var op = GetOp(ctx, opName, status);
 
             var op_def = tf.get_default_graph().GetOpDef(opName);
 
-            var flattened_attrs = new List<object>(op_def.InputArg.Count);
+            var flattened_attrs = new List<object>(op_def.Attr.Count * 2);
             var flattened_inputs = new List<Tensor>(op_def.InputArg.Count);
 
             // Set non-inferred attrs, including setting defaults if the attr is passed in
@@ -160,6 +160,7 @@ namespace Tensorflow.Eager
 
             var flat_result = retVals.Select(x => new EagerTensor(x)).ToArray();
 
+
             if (op_exec_info.run_callbacks)
             {
                 RunCallbacks(op_exec_info,
@@ -172,7 +173,7 @@ namespace Tensorflow.Eager
 
         SafeOpHandle GetOp(Context ctx, string op_or_function_name, Status status)
         {
-            if (thread_local_eager_operation_map.find(ctx, out var op))
+            /*if (thread_local_eager_operation_map.find(ctx, out var op))
                 c_api.TFE_OpReset(op, op_or_function_name, ctx.DeviceName, status.Handle);
             else
             {
@@ -180,6 +181,9 @@ namespace Tensorflow.Eager
                 thread_local_eager_operation_map[ctx] = op;
             }
 
+            status.Check(true);
+            return op;*/
+            var op = c_api.TFE_NewOp(ctx.Handle, op_or_function_name, status.Handle);
             status.Check(true);
             return op;
         }
@@ -218,36 +222,18 @@ namespace Tensorflow.Eager
             SafeOpHandle op,
             Status status)
         {
-            SafeTensorHandleHandle input_handle;
-
-            // ConvertToTensor();
-            switch (inputs)
-            {
-                case EagerTensor input:
-                    input_handle = input.EagerTensorHandle;
-                    flattened_inputs.Add(input);
-                    break;
-                case ResourceVariable variable:
-                    var var_tensor = variable.AsTensor();
-                    input_handle = var_tensor.EagerTensorHandle;
-                    flattened_inputs.Add(var_tensor);
-                    break;
-                default:
-                    var tensor = tf.convert_to_tensor(inputs);
-                    input_handle = tensor.EagerTensorHandle;
-                    flattened_inputs.Add(tensor);
-                    break;
-            }
+            var tensor = tf.convert_to_tensor(inputs);
+            flattened_inputs.Add(tensor);
 
             if (add_type_attr && !string.IsNullOrEmpty(input_arg.TypeAttr))
             {
-                var dtype = c_api.TFE_TensorHandleDataType(input_handle);
+                var dtype = c_api.TFE_TensorHandleDataType(tensor.EagerTensorHandle);
                 c_api.TFE_OpSetAttrType(op, input_arg.TypeAttr, dtype);
                 flattened_attrs.Add(input_arg.TypeAttr);
                 flattened_attrs.Add(dtype);
             }
 
-            c_api.TFE_OpAddInput(op, input_handle, status.Handle);
+            c_api.TFE_OpAddInput(op, tensor.EagerTensorHandle, status.Handle);
             status.Check(true);
 
             return true;
@@ -371,7 +357,7 @@ namespace Tensorflow.Eager
             switch (type)
             {
                 case TF_AttrType.TF_ATTR_STRING:
-                    c_api.TFE_OpSetAttrString(op, key, value.ToString(), (uint)value.ToString().Length);
+                    c_api.TFE_OpSetAttrString(op, key, value.ToString(), (ulong)value.ToString().Length);
                     break;
                 case TF_AttrType.TF_ATTR_TYPE:
                     c_api.TFE_OpSetAttrType(op, key, (TF_DataType)value);
@@ -380,7 +366,10 @@ namespace Tensorflow.Eager
                     c_api.TFE_OpSetAttrBool(op, key, Convert.ToBoolean(value));
                     break;
                 case TF_AttrType.TF_ATTR_INT:
-                    c_api.TFE_OpSetAttrInt(op, key, Convert.ToInt64(value));
+                    var size = Convert.ToInt64(value);
+                    c_api.TFE_OpSetAttrInt(op, key, size);
+                    if (attr_list_sizes != null)
+                        attr_list_sizes[key] = size;
                     break;
                 case TF_AttrType.TF_ATTR_FLOAT:
                     c_api.TFE_OpSetAttrFloat(op, key, Convert.ToSingle(value));

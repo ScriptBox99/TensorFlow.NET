@@ -40,21 +40,6 @@ namespace Tensorflow
                 container: container,
                 shared_name: shared_name);
 
-        public static Tensor assign(Tensor @ref, object value,
-            bool validate_shape = true,
-            bool use_locking = true,
-            string name = null)
-        {
-            if (@ref.dtype.is_ref_dtype())
-                return gen_state_ops.assign(@ref,
-                    value,
-                    validate_shape: validate_shape,
-                    use_locking: use_locking,
-                    name: name);
-
-            return @ref.assign((Tensor)value, name: name);
-        }
-
         public static Tensor assign<T>(T @ref, object value,
             bool validate_shape = true,
             bool use_locking = true,
@@ -85,10 +70,12 @@ namespace Tensorflow
         public static Tensor assign_sub(IVariableV1 @ref,
             Tensor value,
             bool use_locking = false,
-            string name = null) => gen_state_ops.assign_sub(@ref,
-                value,
-                use_locking: use_locking,
-                name: name);
+            string name = null) => @ref.dtype.is_ref_dtype() ?
+                gen_state_ops.assign_sub(@ref,
+                    value,
+                    use_locking: use_locking,
+                    name: name) :
+                @ref.assign_sub(value, name: name);
 
         //"""Update 'ref' by adding 'value' to it.
         //

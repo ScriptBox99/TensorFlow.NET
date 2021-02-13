@@ -8,20 +8,21 @@ namespace Tensorflow.Graphs
     {
         public Func<Tensor, Tensor> to_graph(Func<Tensor, Tensor> func)
         {
-            string func_name = $"autograph_{Guid.NewGuid()}_{func.Method.Name}";
+            string func_name = $"{func.Method.Name}_{Guid.NewGuid()}";
 
-            // IntPtr func_handle;
-            using (var graph = new FuncGraph(func_name))
-            {
-                var input = tf.placeholder(tf.int32);
-                var output = func(input);
+            var graph = new FuncGraph(func_name);
+            graph.as_default();
 
-                var opers = graph._nodes_by_name.Values.Select(x => x as Operation).ToArray();
-                var func_handle = graph.ToGraph(opers,
-                    new Operation[] { input },
-                    new Operation[] { output },
-                    null);
-            }
+            var input = tf.placeholder(tf.int32);
+            var output = func(input);
+
+            var opers = graph._nodes_by_name.Values.Select(x => x as Operation).ToArray();
+            graph.ToGraph(opers,
+                new[] { input },
+                new[] { output },
+                null);
+            graph.Exit();
+            
 
             return (Tensor input) =>
             {
@@ -37,22 +38,22 @@ namespace Tensorflow.Graphs
 
         public Func<Tensor, Tensor, Tensor> to_graph(Func<Tensor, Tensor, Tensor> func)
         {
-            string func_name = $"autograph_{Guid.NewGuid()}_{func.Method.Name}";
+            string func_name = $"{func.Method.Name}_{Guid.NewGuid()}";
 
-            // IntPtr func_handle;
-            using (var graph = new FuncGraph(func_name))
-            {
-                var input1 = tf.placeholder(tf.int32);
-                var input2 = tf.placeholder(tf.int32);
-                var output = func(input1, input2);
+            var graph = new FuncGraph(func_name);
+            graph.as_default();
 
-                var opers = graph._nodes_by_name.Values.Select(x => x as Operation).ToArray();
-                var func_handle = graph.ToGraph(opers,
-                    new Operation[] { input1, input2 },
-                    new Operation[] { output },
-                    null);
-            }
+            var input1 = tf.placeholder(tf.int32);
+            var input2 = tf.placeholder(tf.int32);
+            var output = func(input1, input2);
 
+            var opers = graph._nodes_by_name.Values.Select(x => x as Operation).ToArray();
+            graph.ToGraph(opers,
+                new[] { input1, input2 },
+                new[] { output },
+                null);
+            graph.Exit();
+            
             return (Tensor a, Tensor b) =>
             {
                 var result = tf.Runner.TFE_Execute(tf.Context,

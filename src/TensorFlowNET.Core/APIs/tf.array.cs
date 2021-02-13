@@ -78,15 +78,15 @@ namespace Tensorflow
         /// <param name="axis"></param>
         /// <param name="name"></param>
         /// <returns>A `Tensor` resulting from concatenation of the input tensors.</returns>
-        public Tensor concat(IList<Tensor> values, int axis, string name = "concat")
+        public Tensor concat(IEnumerable<Tensor> values, int axis, string name = "concat")
         {
-            if (values.Count == 1)
+            if (values.Count() == 1)
             {
                 return tf_with(ops.name_scope(name), scope =>
                 {
                     var tensor = ops.convert_to_tensor(axis, name: "concat_dim", dtype: dtypes.int32);
                     Debug.Assert(tensor.TensorShape.ndim == 0);
-                    return identity(values[0], name: scope);
+                    return identity(values.First(), name: scope);
                 });
             }
 
@@ -152,7 +152,7 @@ namespace Tensorflow
         /// <param name="name"></param>
         /// <param name="conjugate"></param>
         /// <returns></returns>
-        public Tensor transpose<T1>(T1 a, int[] perm = null, string name = "transpose", bool conjugate = false)
+        public Tensor transpose<T1>(T1 a, TensorShape perm = null, string name = "transpose", bool conjugate = false)
             => array_ops.transpose(a, perm, name, conjugate);
 
         /// <summary>
@@ -214,6 +214,9 @@ namespace Tensorflow
         /// <returns>A `Tensor` with all elements set to 1.</returns>
         public Tensor ones_like(Tensor tensor, TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool optimize = true)
             => array_ops.ones_like(tensor, dtype: dtype, name: name, optimize: optimize);
+
+        public Tensor ones_like(NDArray nd, TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool optimize = true)
+            => array_ops.ones_like(nd, dtype: dtype, name: name, optimize: optimize);
 
         public Tensor one_hot(Tensor indices, int depth,
             Tensor on_value = null,
@@ -289,6 +292,9 @@ namespace Tensorflow
         /// <returns>A `Tensor` with all elements set to zero.</returns>
         public Tensor zeros_like(Tensor tensor, TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool optimize = true)
             => array_ops.zeros_like(tensor, dtype: dtype, name: name, optimize: optimize);
+
+        public Tensor zeros_like(NDArray nd, TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool optimize = true)
+            => array_ops.zeros_like(nd, dtype: dtype, name: name, optimize: optimize);
 
         /// <summary>
         /// Stops gradient computation.

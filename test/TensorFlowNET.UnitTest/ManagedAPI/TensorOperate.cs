@@ -11,14 +11,70 @@ namespace TensorFlowNET.UnitTest.ManagedAPI
         [TestMethod]
         public void TransposeTest()
         {
-            var a = tf.constant(np.array(new[, , ,] { { { { 1, 11, 2, 22 } }, { { 3, 33, 4, 44 } } },
-                { { { 5, 55, 6, 66 } }, { { 7, 77, 8, 88 } } } }));
-            var b = tf.transpose(a, new[] { 3, 1, 2, 0 });
-            var transpose_a = tf.constant(np.array(new[, , ,] { { { { 1, 5 } }, { { 3, 7 } } },
-                { { { 11, 55 } }, { { 33, 77 } } }, { { { 2, 6 } }, { { 4, 8 } } },
-                { { { 22, 66 } }, { { 44, 88 } } } }));
-            Assert.IsTrue(Enumerable.SequenceEqual(new[] { 4, 2, 1, 2 }, b.shape));
-            Assert.IsTrue(Enumerable.SequenceEqual(transpose_a.numpy().ToArray<int>(), b.numpy().ToArray<int>()));
+            // https://www.tensorflow.org/api_docs/python/tf/transpose#for_example_2
+            var x = tf.constant(new int[,]
+            {
+                { 1, 2, 3 },
+                { 4, 5, 6 }
+            });
+            var transpose_x = tf.transpose(x);
+            Assert.AreEqual(new[] { 1, 4 }, transpose_x[0].numpy());
+            Assert.AreEqual(new[] { 2, 5 }, transpose_x[1].numpy());
+            Assert.AreEqual(new[] { 3, 6 }, transpose_x[2].numpy());
+
+            #region constant a
+            var a = tf.constant(np.array(new[, , ,]
+            {
+                {
+                    {
+                        { 1, 11, 2, 22 }
+                    },
+                    {
+                        { 3, 33, 4, 44 }
+                    }
+                },
+                {
+                    {
+                        { 5, 55, 6, 66 }
+                    },
+                    {
+                        { 7, 77, 8, 88 }
+                    }
+                }
+            }));
+
+            #endregion
+            var actual_transposed_a = tf.transpose(a, new[] { 3, 1, 2, 0 });
+
+            #region constant transpose_a
+            var expected_transposed_a = tf.constant(np.array(new[, , ,]
+            {
+                {
+                    { { 1, 5 } }, { { 3, 7 } }
+                },
+                {
+                    { { 11, 55 } }, { { 33, 77 } }
+                },
+                {
+                    {
+                        { 2, 6 }
+                    },
+                    {
+                        { 4, 8 }
+                    }
+                },
+                {
+                    {
+                        { 22, 66 }
+                    },
+                    {
+                        { 44, 88 }
+                    }
+                }
+            }));
+            #endregion
+            Assert.AreEqual((4, 2, 1, 2), actual_transposed_a.TensorShape);
+            Assert.AreEqual(expected_transposed_a.numpy(), actual_transposed_a.numpy());
         }
 
         [TestMethod]
@@ -74,5 +130,55 @@ namespace TensorFlowNET.UnitTest.ManagedAPI
             Assert.AreEqual(3, splitValue.Length);
             Assert.IsTrue(Enumerable.SequenceEqual(new[] { 2, 2 }, splitValue[0].shape));
         }
+
+        #region ones/zeros like
+        [TestMethod]
+        public void TestOnesLike()
+        {
+            #region 2-dimension
+            var ones2D = tf.ones_like(new int[,]
+            {
+                { 1, 2, 3 },
+                { 4, 5, 6 }
+            });
+
+            Assert.AreEqual(new[] { 1, 1, 1 }, ones2D[0].numpy());
+            Assert.AreEqual(new[] { 1, 1, 1 }, ones2D[1].numpy());
+            #endregion
+
+            #region 1-dimension
+            var ones1D = tf.ones_like(new int[,]
+            {
+                { 1, 2, 3 }
+            });
+
+            Assert.AreEqual(new[] { 1, 1, 1 }, ones1D[0].numpy());
+            #endregion
+        }
+
+        [TestMethod]
+        public void TestZerosLike()
+        {
+            #region 2-dimension
+            var zeros2D = tf.zeros_like(new int[,]
+            {
+                { 1, 2, 3 },
+                { 4, 5, 6 }
+            });
+
+            Assert.AreEqual(new[] { 0, 0, 0 }, zeros2D[0].numpy());
+            Assert.AreEqual(new[] { 0, 0, 0 }, zeros2D[1].numpy());
+            #endregion
+
+            #region 1-dimension
+            var zeros1D = tf.zeros_like(new int[,]
+            {
+                { 1, 2, 3 }
+            });
+
+            Assert.AreEqual(new[] { 0, 0, 0 }, zeros1D[0].numpy());
+            #endregion
+        }
+        #endregion
     }
 }

@@ -23,6 +23,15 @@ namespace Tensorflow
         {
             public Tensor log(Tensor x, string name = null)
                 => gen_math_ops.log(x, name);
+
+            /// <summary>
+            /// Computes the Gauss error function of `x` element-wise.
+            /// </summary>
+            /// <param name="x"></param>
+            /// <param name="name"></param>
+            /// <returns></returns>
+            public Tensor erf(Tensor x, string name = null)
+                => math_ops.erf(x, name);
         }
 
         public Tensor abs(Tensor x, string name = null)
@@ -118,6 +127,9 @@ namespace Tensorflow
         public Tensor cos(Tensor x, string name = null)
             => gen_math_ops.cos(x, name);
 
+        public Tensor cos(float x, string name = null)
+            => gen_math_ops.cos(x, name);
+
         /// <summary>
         /// Computes hyperbolic cosine of x element-wise.
         /// </summary>
@@ -209,6 +221,9 @@ namespace Tensorflow
             => gen_math_ops.log1p(x, name);
 
         public Tensor logical_and(Tensor x, Tensor y, string name = null)
+            => gen_math_ops.logical_and(x, y, name);
+
+        public Tensor logical_and(bool x, bool y, string name = null)
             => gen_math_ops.logical_and(x, y, name);
 
         public Tensor logical_not(Tensor x, string name = null)

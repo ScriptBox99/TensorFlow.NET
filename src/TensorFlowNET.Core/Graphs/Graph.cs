@@ -87,7 +87,7 @@ namespace Tensorflow
         private List<Tensor> _unfeedable_tensors = new List<Tensor>();
 
         public string _name_stack = "";
-        private string _graph_key;
+        protected string _graph_key;
         public string graph_key => _graph_key;
         public string _last_loss_reduction;
         public bool _is_loss_scaled_by_optimizer { get; set; }
@@ -118,6 +118,9 @@ namespace Tensorflow
             }
         }
 
+        protected Graph outer_graph;
+        public Graph OuterGraph => outer_graph;
+
         public Graph()
         {
             _handle = c_api.TF_NewGraph();
@@ -143,10 +146,12 @@ namespace Tensorflow
 
         /// <summary>
         /// Returns a context manager that makes this `Graph` the default graph.
+        /// Must call Exit() to pop graph
         /// </summary>
         /// <returns></returns>
-        public Graph as_default()
+        public virtual Graph as_default()
         {
+            tf.Context.graph_mode(isFunc: false);
             return ops.set_default_graph(this);
         }
 
@@ -262,7 +267,7 @@ namespace Tensorflow
                 throw new RuntimeError("Graph is finalized and cannot be modified.");
         }
 
-        public Operation create_op(string op_type, Tensor[] inputs, TF_DataType[] dtypes,
+        public virtual Operation create_op(string op_type, Tensor[] inputs, TF_DataType[] dtypes,
             TF_DataType[] input_types = null, string name = null,
             Dictionary<string, AttrValue> attrs = null, OpDef op_def = null,
             bool compute_device = true)
@@ -297,7 +302,7 @@ namespace Tensorflow
 
         public void device(string device_name)
         {
-            throw new NotImplementedException("");
+            
         }
 
         private void _create_op_helper(Operation op, bool compute_device = true)
@@ -484,7 +489,7 @@ namespace Tensorflow
 
         protected override void DisposeManagedResources()
         {
-            ops.default_graph_stack.remove(this);
+            
         }
 
         protected override void DisposeUnmanagedResources(IntPtr handle)
@@ -526,6 +531,12 @@ namespace Tensorflow
             return new TensorShape(dims.Select(x => (int)x).ToArray());
         }
 
+        public virtual void Exit()
+        {
+            tf.Context.restore_mode();
+            ops.pop_graph();
+        }
+
         string debugString = string.Empty;
         public override string ToString()
         {
@@ -551,24 +562,6 @@ namespace Tensorflow
         public static implicit operator IntPtr(Graph graph)
         {
             return graph._handle;
-        }
-
-        public OrderedDictionary _captures => new OrderedDictionary();
-
-        public Tensor[] external_captures()
-        {
-            Tensor[] captures = new Tensor[this._captures.Count];
-            ICollection inner = this._captures.Keys; // c[0]
-            inner.CopyTo(captures, 0);
-            return captures;
-        }
-
-        public Tensor[] internal_captures()
-        {
-            Tensor[] captures = new Tensor[this._captures.Count];
-            ICollection inner = this._captures.Values; // c[1]
-            inner.CopyTo(captures, 0);
-            return captures;
         }
     }
 }

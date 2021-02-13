@@ -15,12 +15,16 @@
 ******************************************************************************/
 
 using System.Collections.Generic;
+using Serilog;
+using Serilog.Core;
 using Tensorflow.Contexts;
 using Tensorflow.Eager;
 using Tensorflow.Gradients;
 
 namespace Tensorflow
 {
+    public delegate Tensor[] BackwardFunction(Tensor[] grads, long[] unneeded_gradients);
+
     public partial class tensorflow : ITensorFlowObject
     {
         public TF_DataType byte8 = TF_DataType.TF_UINT8;
@@ -35,17 +39,21 @@ namespace Tensorflow
         public TF_DataType chars = TF_DataType.TF_STRING;
         public TF_DataType @string = TF_DataType.TF_STRING;
 
-        public delegate Tensor[] BackwardFunction(Tensor[] grads, long[] unneeded_gradients);
-
         public Status Status;
         public OpDefLibrary OpDefLib;
         public Context Context;
         public IEagerRunner Runner;
+        public Logger Logger;
 
         public tensorflow()
         {
+            Logger = new LoggerConfiguration()
+                .MinimumLevel.Error()
+                .WriteTo.Console()
+                .CreateLogger();
+
             Status = new Status();
-            Context = new Context(new ContextOptions(), Status);
+            Context = new Context();
             OpDefLib = new OpDefLibrary();
             ConstructThreadingObjects();
             InitGradientEnvironment();

@@ -16,9 +16,12 @@
 
 using NumSharp;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Tensorflow.Eager;
+using Tensorflow.Graphs;
+using static Tensorflow.Binding;
 
 namespace Tensorflow
 {
@@ -51,12 +54,13 @@ namespace Tensorflow
 
         private static NDArray _ConstantValue(Tensor tensor, bool partial)
         {
-            if (tensor.op.type == "Const")
+            switch (tensor.op.type)
             {
-                return MakeNdarray(tensor.op.get_attr("value") as TensorProto);
+                case "Const":
+                    return MakeNdarray(tensor.op.get_attr("value") as TensorProto);
+                default:
+                    return null;
             }
-
-            return null;
         }
 
         public static NDArray MakeNdarray(TensorProto tensor)
@@ -65,27 +69,25 @@ namespace Tensorflow
             int num_elements = np.prod(shape);
             var tensor_dtype = tensor.Dtype.as_numpy_dtype();
 
-            if (tensor.TensorContent.Length > 0)
+            if (shape.Length > 0 && tensor.TensorContent.Length > 0)
             {
                 return np.frombuffer(tensor.TensorContent.ToByteArray(), tensor_dtype).reshape(shape);
             }
             else if (tensor.Dtype == DataType.DtHalf || tensor.Dtype == DataType.DtBfloat16)
-#pragma warning disable CS0642 // Possible mistaken empty statement
-                ;
-#pragma warning restore CS0642 // Possible mistaken empty statement
+            {
+                return np.array(tensor.HalfVal).reshape(shape);
+            }
             else if (tensor.Dtype == DataType.DtFloat)
-#pragma warning disable CS0642 // Possible mistaken empty statement
-                ;
-#pragma warning restore CS0642 // Possible mistaken empty statement
+            {
+                return np.array(tensor.FloatVal).reshape(shape);
+            }
             else if (new DataType[] { DataType.DtInt32, DataType.DtUint8 }.Contains(tensor.Dtype))
             {
-                if (tensor.IntVal.Count == 1)
-                    return np.repeat(np.array(tensor.IntVal[0]), num_elements).reshape(shape);
+                return np.array(tensor.IntVal).reshape(shape);
             }
             else if (tensor.Dtype == DataType.DtBool)
             {
-                if (tensor.BoolVal.Count == 1)
-                    return np.repeat(np.array(tensor.BoolVal[0]), num_elements).reshape(shape);
+                return np.array(tensor.BoolVal).reshape(shape);
             }
 
             throw new NotImplementedException("MakeNdarray");
@@ -121,6 +123,17 @@ namespace Tensorflow
             {
                 nparray = nd;
             }
+            else if(values is string str)
+            {
+                // scalar string
+                nparray = convert_to_numpy_ndarray(values);
+                shape = new int[0];
+            }
+            else if(values is string[] strings)
+            {
+                nparray = convert_to_numpy_ndarray(values);
+                shape = new[] { strings.Length };
+            }
             else
             {
                 if (values == null)
@@ -149,9 +162,14 @@ namespace Tensorflow
             {
                 if (numpy_dtype == TF_DataType.TF_STRING)
                 {
-                    // scalar string
-                    shape = new int[0];
-                    shape_size = 0;
+                    if (nparray.ndim == 0)
+                    {
+                        // scalar string
+                        shape = new int[0];
+                        shape_size = 0;
+                    }
+                    else
+                        throw new NotImplementedException($"Not implemented for {nparray.ndim} dims string array.");
                 }
                 else
                 {
@@ -389,14 +407,14 @@ would not be rank 1.", tensor.op.get_attr("axis")));
             }
             else if (tensor.op.type == "Placeholder" &&
                   tensor.op.graph.building_function &&
-                  hasattr(tensor.op.graph, "internal_captures"))
+                  tensor.op.graph is FuncGraph func_graph)
             {
                 int i = 0;
-                foreach (Tensor capture in tensor.op.graph.internal_captures())
+                foreach (Tensor capture in func_graph.internal_captures)
                 {
                     if (capture.GetType() == typeof(Tensor))
                     {
-                        var external_capture = tensor.op.graph.external_captures()[i];
+                        var external_capture = func_graph.external_captures[i];
                         return constant_value_as_shape(external_capture);
                     }
 
@@ -406,18 +424,13 @@ would not be rank 1.", tensor.op.get_attr("axis")));
 
             var ret = tensor.TensorShape.unknown_shape(shape.dims[0]);
             var value = constant_value(tensor);
-            if (value != null)
+            if (!(value is null))
             {
-                int[] d_ = { };
-                foreach (int d in value)
-                {
-                    if (d >= 0)
-                        d_[d_.Length] = d;
-                    else
-                        d_[d_.Length] = -1; // None
-                }
+                var d_ = new int[value.size];
+                foreach (var (index, d) in enumerate(value.ToArray<int>()))
+                    d_[index] = d >= 0 ? d : -1;
+                
                 ret = ret.merge_with(new TensorShape(d_));
-
             }
             return ret;
         }
@@ -430,6 +443,9 @@ would not be rank 1.", tensor.op.get_attr("axis")));
             {
                 case NDArray val:
                     nd = val;
+                    break;
+                case TensorShape val:
+                    nd = val.dims;
                     break;
                 case bool boolVal:
                     nd = boolVal;
@@ -474,7 +490,7 @@ would not be rank 1.", tensor.op.get_attr("axis")));
                     nd = new NDArray(Encoding.ASCII.GetBytes(strVal));
                     break;
                 case string[] strVals:
-                    nd = strVals;
+                    nd = np.array(strVals);
                     break;
                 case byte[] byteValues:
                     nd = byteValues;
@@ -560,9 +576,14 @@ would not be rank 1.", tensor.op.get_attr("axis")));
         {
             var dtype = tensor.dtype;
 
-            if (dtype == TF_DataType.TF_STRING && tensor.NDims > 0)
+            if (dtype == TF_DataType.TF_STRING)
             {
-                return $"['{string.Join("', '", tensor.StringData())}']";
+                if (tensor.rank == 0)
+                    return "'" + string.Join(string.Empty, tensor.StringBytes()[0]
+                        .Take(25)
+                        .Select(x => x < 32 || x > 127 ? "\\x" + x.ToString("x") : Convert.ToChar(x).ToString())) + "'";
+                else
+                    return $"['{string.Join("', '", tensor.StringData().Take(25))}']";
             }
 
             var nd = tensor.numpy();
@@ -576,13 +597,83 @@ would not be rank 1.", tensor.op.get_attr("axis")));
                     return string.Join(string.Empty, nd.ToArray<byte>()
                         .Select(x => x < 32 || x > 127 ? "\\x" + x.ToString("x") : Convert.ToChar(x).ToString()));
                 case TF_DataType.TF_BOOL:
-                    return (nd.GetByte(0) > 0).ToString();
+                    return nd.GetBoolean(0).ToString();
                 case TF_DataType.TF_VARIANT:
                 case TF_DataType.TF_RESOURCE:
                     return "<unprintable>";
                 default:
                     return nd.ToString();
             }
+        }
+
+        public static ParsedSliceArgs ParseSlices(Slice[] slices)
+        {
+            var begin = new List<int>();
+            var end = new List<int>();
+            var strides = new List<int>();
+
+            var index = 0;
+            var (new_axis_mask, shrink_axis_mask) = (0, 0);
+            var (begin_mask, end_mask) = (0, 0);
+            var ellipsis_mask = 0;
+
+            foreach (var s in slices)
+            {
+                if (s.IsNewAxis)
+                {
+                    begin.Add(0);
+                    end.Add(0);
+                    strides.Add(1);
+                    new_axis_mask |= (1 << index);
+                }
+                else if (s.IsEllipsis)
+                {
+                    begin.Add(0);
+                    end.Add(0);
+                    strides.Add(1);
+                    ellipsis_mask |= (1 << index);
+                }
+                else
+                {
+                    if (s.Start.HasValue)
+                    {
+                        begin.Add(s.Start.Value);
+                    }
+                    else
+                    {
+                        begin.Add(0);
+                        begin_mask |= (1 << index);
+                    }
+
+                    if (s.Stop.HasValue)
+                    {
+                        end.Add(s.Stop.Value);
+                    }
+                    else
+                    {
+                        end.Add(0);
+                        end_mask |= (1 << index);
+                    }
+
+                    strides.Add(s.Step);
+                    if (s.IsIndex)
+                        shrink_axis_mask |= (1 << index);
+                }
+
+                index += 1;
+            }
+
+            return new ParsedSliceArgs
+            {
+                Begin = begin.ToArray(),
+                End = end.ToArray(),
+                Strides = strides.ToArray(),
+                BeginMask = begin_mask,
+                EndMask = end_mask,
+                EllipsisMask = ellipsis_mask,
+                ShrinkAxisMask = shrink_axis_mask,
+                NewAxisMask = new_axis_mask
+            };
         }
     }
 }

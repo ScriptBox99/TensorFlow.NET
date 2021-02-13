@@ -16,6 +16,7 @@
 
 using System;
 using Tensorflow.Util;
+using static Tensorflow.Binding;
 
 namespace Tensorflow.Eager
 {
@@ -23,11 +24,13 @@ namespace Tensorflow.Eager
     {
         private SafeOpHandle()
         {
+
         }
 
         public SafeOpHandle(IntPtr handle)
             : base(handle)
         {
+
         }
 
         protected override bool ReleaseHandle()

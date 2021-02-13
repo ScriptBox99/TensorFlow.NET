@@ -5,7 +5,7 @@
     <AssemblyName>TensorFlow.NET</AssemblyName>
     <RootNamespace>Tensorflow</RootNamespace>
     <TargetTensorFlow>2.2.0</TargetTensorFlow>
-    <Version>0.30.0</Version>
+    <Version>0.33.0</Version>
     <LangVersion>8.0</LangVersion>
     <Authors>Haiping Chen, Meinrad Recheis, Eli Belash</Authors>
     <Company>SciSharp STACK</Company>
@@ -15,22 +15,22 @@
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>http://scisharpstack.org</PackageProjectUrl>
     <PackageIconUrl>https://avatars3.githubusercontent.com/u/44989469?s=200&amp;v=4</PackageIconUrl>
-    <PackageTags>TensorFlow, NumSharp, SciSharp, MachineLearning, TensorFlow.NET, C#, TF.NET</PackageTags>
+    <PackageTags>TensorFlow, SciSharp, Machine Learning, TensorFlow.NET, TF.NET, AI</PackageTags>
     <Description>Google's TensorFlow full binding in .NET Standard.
 Building, training and infering deep learning models.
 https://tensorflownet.readthedocs.io</Description>
-    <AssemblyVersion>0.30.0.0</AssemblyVersion>
+    <AssemblyVersion>0.33.0.0</AssemblyVersion>
     <PackageReleaseNotes>tf.net 0.20.x and above are based on tensorflow native 2.x.
 
 * Eager Mode is added finally.
 * tf.keras is partially working. 
 * tf.data is added.
-* autograph works partially.
+* Autograph works partially.
+* Improve memory usage.
 
-TensorFlow .NET v0.30 is focused on making more Keras API work including:
-* tf.keras.datasets
-* Building keras model in subclass, functional and sequential api</PackageReleaseNotes>
-    <FileVersion>0.30.0.0</FileVersion>
+TensorFlow .NET v0.3x is focused on making more Keras API works.
+Keras API is a separate package released as TensorFlow.Keras.</PackageReleaseNotes>
+    <FileVersion>0.33.0.0</FileVersion>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <SignAssembly>true</SignAssembly>
@@ -40,7 +40,7 @@ TensorFlow .NET v0.30 is focused on making more Keras API work including:
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;TRACK_TENSOR_LIFE_1</DefineConstants>
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
 
@@ -82,9 +82,10 @@ TensorFlow .NET v0.30 is focused on making more Keras API work including:
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Protobuf" Version="3.11.4" />
     <PackageReference Include="MethodBoundaryAspect.Fody" Version="2.0.138" />
-    <PackageReference Include="NumSharp.Lite" Version="0.1.9" />
-    <PackageReference Include="Protobuf.Text" Version="0.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1" />
+    <PackageReference Include="NumSharp.Lite" Version="0.1.12" />
+    <PackageReference Include="Protobuf.Text" Version="0.5.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
   </ItemGroup>
 </Project>
