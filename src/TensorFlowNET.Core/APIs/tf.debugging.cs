@@ -15,6 +15,7 @@
 ******************************************************************************/
 
 using Tensorflow.Debugging;
+using static Tensorflow.Binding;
 
 namespace Tensorflow
 {
@@ -27,5 +28,8 @@ namespace Tensorflow
         /// https://developer.ibm.com/technologies/artificial-intelligence/tutorials/debug-tensorflow/
         /// </summary>
         public DebugImpl debugging => new DebugImpl();
+
+        public void print(Tensor input)
+            => tf.logging.print_v2(input);
     }
 }

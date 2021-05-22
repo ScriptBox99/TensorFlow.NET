@@ -14,6 +14,7 @@
    limitations under the License.
 ******************************************************************************/
 
+using System.Linq;
 using System.Collections.Generic;
 using Tensorflow.Keras.ArgsDefinition;
 using Tensorflow.Keras.Layers;
@@ -29,18 +30,13 @@ namespace Tensorflow.Keras.Engine
     public class Sequential : Functional
     {
         SequentialArgs args;
-        bool _is_graph_network;
-        Tensors inputs;
-        Tensors outputs;
 
         bool _compute_output_and_mask_jointly;
         bool _auto_track_sub_layers;
         TensorShape _inferred_input_shape;
         bool _has_explicit_input_shape;
-        TF_DataType _input_dtype;
         
         public TensorShape output_shape => outputs[0].TensorShape;
-        bool built = false;
 
         public Sequential(SequentialArgs args)
             : base(args.Inputs, args.Outputs, name: args.Name)
@@ -103,7 +99,7 @@ namespace Tensorflow.Keras.Engine
                 if (set_inputs)
                 {
                     // If an input layer (placeholder) is available.
-                    outputs = layer.InboundNodes[^1].Outputs;
+                    outputs = layer.InboundNodes.Last().Outputs;
                     inputs = layer_utils.get_source_inputs(outputs[0]);
                     built = true;
                     _has_explicit_input_shape = true;

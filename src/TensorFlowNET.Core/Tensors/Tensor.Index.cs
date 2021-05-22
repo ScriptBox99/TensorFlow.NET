@@ -60,12 +60,8 @@ namespace Tensorflow
             }
         }
 
-        public Tensor this[Range slices]
-            => throw new NotImplementedException("");
-
         public Tensor this[params string[] slices]
             => this[slices.Select(x => new Slice(x)).ToArray()];
-
 
         public Tensor slice(Slice slice)
         {
@@ -122,6 +118,35 @@ namespace Tensorflow
 
                 throw new NotImplementedException("");
             });
+        }
+
+        public Tensor this[Tensor start, Tensor stop = null, Tensor step = null]
+        {
+            get
+            {
+                var args = tensor_util.ParseSlices(start, stop: stop, step: step);
+
+                return tf_with(ops.name_scope(null, "strided_slice", args), scope =>
+                {
+                    string name = scope;
+
+                    var tensor = gen_array_ops.strided_slice(
+                        this,
+                        args.PackedBegin,
+                        args.PackedEnd,
+                        args.PackedStrides,
+                        begin_mask: args.BeginMask,
+                        end_mask: args.EndMask,
+                        shrink_axis_mask: args.ShrinkAxisMask,
+                        new_axis_mask: args.NewAxisMask,
+                        ellipsis_mask: args.EllipsisMask,
+                        name: name);
+
+                    tensor.OriginalVarSlice = args;
+
+                    return tensor;
+                });
+            }
         }
 
         public Tensor slice(int start)

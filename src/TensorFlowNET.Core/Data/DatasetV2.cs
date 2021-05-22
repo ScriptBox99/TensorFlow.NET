@@ -14,6 +14,7 @@ namespace Tensorflow
     public class DatasetV2 : IDatasetV2
     {
         protected dataset_ops ops = new dataset_ops();
+        public string[] class_names { get; set; }
         public Tensor variant_tensor { get; set; }
 
         public TensorSpec[] structure { get; set; }
@@ -54,7 +55,7 @@ namespace Tensorflow
         public IDatasetV2 optimize(string[] optimizations, string[] optimization_configs)
             => new OptimizeDataset(this, optimizations, optimization_configs: optimization_configs);
 
-        public IDatasetV2 map(Func<Tensor, Tensor> map_func,
+        public IDatasetV2 map(Func<Tensors, Tensors> map_func,
             bool use_inter_op_parallelism = true,
             bool preserve_cardinality = true,
             bool use_legacy_function = false)
@@ -64,39 +65,57 @@ namespace Tensorflow
                 preserve_cardinality: preserve_cardinality,
                 use_legacy_function: use_legacy_function);
 
-        public IDatasetV2 map(Func<Tensors, Tensors> map_func, int num_parallel_calls = -1)
+        public IDatasetV2 map(Func<Tensors, Tensors> map_func, int num_parallel_calls)
             => new ParallelMapDataset(this, map_func, num_parallel_calls: num_parallel_calls);
+
+        public OwnedIterator make_one_shot_iterator()
+        {
+            if (tf.Context.executing_eagerly())
+            {
+                // with ops.colocate_with(self._variant_tensor)
+                return new OwnedIterator(this);
+            }
+
+            throw new NotImplementedException("");
+        }
 
         public IDatasetV2 flat_map(Func<Tensor, IDatasetV2> map_func)
             => new FlatMapDataset(this, map_func);
 
-        public IDatasetV2 model(AutotuneAlgorithm algorithm, long cpu_budget)
-            => new ModelDataset(this, algorithm, cpu_budget);
+        public IDatasetV2 model(AutotuneAlgorithm algorithm, long cpu_budget, long ram_budget)
+            => new ModelDataset(this, algorithm, cpu_budget, ram_budget);
 
         public IDatasetV2 with_options(DatasetOptions options)
             => new OptionsDataset(this, options);
 
         public IDatasetV2 apply_options()
         {
+            IDatasetV2 dataset = this;
             // (1) Apply threading options
-            var graph_rewrites = new[]
-            {
-                "map_and_batch_fusion",
-                "noop_elimination",
-                "shuffle_and_repeat_fusion"
-            };
 
-            var graph_rewrite_configs = new string[0];
-
-            // (2) Apply graph rewrite options
-            var dataset = optimize(graph_rewrites, graph_rewrite_configs);
-
-            // (3) Apply autotune options
+            // (2) Apply autotune options
             var autotune = true;
             long cpu_budget = 0;
-
+            long ram_budget = 0;
             if (autotune)
-                dataset = dataset.model(AutotuneAlgorithm.HILL_CLIMB, cpu_budget);
+                dataset = dataset.model(AutotuneAlgorithm.HILL_CLIMB, cpu_budget, ram_budget);
+
+            // (3) Apply graph rewrite options
+            var graph_rewrites = new[]
+            {
+                "noop_elimination",
+                "map_and_batch_fusion",
+                "shuffle_and_repeat_fusion"
+            };
+            var graph_rewrite_configs = new string[]
+            {
+                "autotune_buffer_sizes:autotune:true",
+                "disable_prefetch_legacy_autotune:autotune:true",
+                "enable_gradient_descent:autotune:true",
+                "map_parallelization:autotune:true"
+            };
+
+            dataset = new OptimizeDataset(dataset, new string[0], new string[0], graph_rewrites, graph_rewrite_configs);
 
             // (4) Apply stats aggregator options
 
@@ -104,18 +123,7 @@ namespace Tensorflow
         }
 
         public Tensor dataset_cardinality(string name = null)
-        {
-            if (tf.Context.executing_eagerly())
-            {
-                var results = tf.Runner.TFE_FastPathExecute(tf.Context, tf.Context.DeviceName,
-                    "DatasetCardinality", name,
-                    null,
-                    variant_tensor);
-                return results[0];
-            }
-
-            throw new NotImplementedException("");
-        }
+            => tf.Context.ExecuteOp("DatasetCardinality", name, new ExecuteOpArgs(variant_tensor));
 
         public override string ToString()
             => $"{GetType().Name} shapes: {string.Join(", ", structure.Select(x => x.shape))}, types: {string.Join(", ", structure.Select(x => "tf." + x.dtype.as_numpy_name()))}";

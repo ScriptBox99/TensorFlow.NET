@@ -89,7 +89,7 @@ namespace Tensorflow.Keras.Engine
             _train_counter.assign(0);
             foreach (var (epoch, iterator) in data_handler.enumerate_epochs())
             {
-                // reset_metrics();
+                reset_metrics();
                 // callbacks.on_epoch_begin(epoch)
                 // data_handler.catch_stop_iteration();
                 foreach (var step in data_handler.steps())
@@ -99,7 +99,7 @@ namespace Tensorflow.Keras.Engine
                     if (verbose == 1)
                     {
                         var result_pairs = string.Join(", ", results.Select(x => $"{x.Item1}: {(float)x.Item2:F6}"));
-                        Console.WriteLine($"Epoch: {epoch + 1:D3}/{epochs:D3}, Step: {step + 1:D4}/{data_handler.Inferredsteps:D4}, {result_pairs}");
+                        Binding.tf_output_redirect.WriteLine($"Epoch: {epoch + 1:D3}/{epochs:D3}, Step: {step + 1:D4}/{data_handler.Inferredsteps:D4}, {result_pairs}");
                     }
                 }
 

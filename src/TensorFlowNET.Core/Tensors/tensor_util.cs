@@ -596,8 +596,6 @@ would not be rank 1.", tensor.op.get_attr("axis")));
                 case TF_DataType.TF_STRING:
                     return string.Join(string.Empty, nd.ToArray<byte>()
                         .Select(x => x < 32 || x > 127 ? "\\x" + x.ToString("x") : Convert.ToChar(x).ToString()));
-                case TF_DataType.TF_BOOL:
-                    return nd.GetBoolean(0).ToString();
                 case TF_DataType.TF_VARIANT:
                 case TF_DataType.TF_RESOURCE:
                     return "<unprintable>";
@@ -668,6 +666,44 @@ would not be rank 1.", tensor.op.get_attr("axis")));
                 Begin = begin.ToArray(),
                 End = end.ToArray(),
                 Strides = strides.ToArray(),
+                BeginMask = begin_mask,
+                EndMask = end_mask,
+                EllipsisMask = ellipsis_mask,
+                ShrinkAxisMask = shrink_axis_mask,
+                NewAxisMask = new_axis_mask
+            };
+        }
+
+        public static ParsedSliceArgs ParseSlices(Tensor start, Tensor stop = null, Tensor step = null)
+        {
+            var begin = new List<Tensor>();
+            var end = new List<Tensor>();
+            var strides = new List<Tensor>();
+
+            // var index = 0;
+            var (new_axis_mask, shrink_axis_mask) = (0, 0);
+            var (begin_mask, end_mask) = (0, 0);
+            var ellipsis_mask = 0;
+
+            begin.Add(start);
+
+            if (stop == null)
+                end.Add(start + 1);
+            else
+                end.Add(stop);
+
+            // shrink_axis_mask |= (1 << index);
+
+            if (step == null)
+                strides.Add(tf.constant(1, dtype: start.dtype));
+            else
+                strides.Add(step);
+
+            return new ParsedSliceArgs
+            {
+                PackedBegin = array_ops.stack(begin),
+                PackedEnd = array_ops.stack(end),
+                PackedStrides = array_ops.stack(strides),
                 BeginMask = begin_mask,
                 EndMask = end_mask,
                 EllipsisMask = ellipsis_mask,

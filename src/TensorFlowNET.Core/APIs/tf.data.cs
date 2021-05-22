@@ -22,6 +22,7 @@ namespace Tensorflow
 
         public class DataOps
         {
+            public int AUTOTUNE = -1;
             public DatasetManager Dataset { get; } = new DatasetManager();
         }
     }

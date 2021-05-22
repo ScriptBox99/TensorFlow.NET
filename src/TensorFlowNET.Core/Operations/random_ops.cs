@@ -81,6 +81,34 @@ namespace Tensorflow
             });
         }
 
+        /// <summary>
+        /// Outputs random values from a uniform distribution.
+        /// </summary>
+        /// <param name="shape"></param>
+        /// <param name="minval"></param>
+        /// <param name="maxval"></param>
+        /// <param name="dtype">The type of the output</param>
+        /// <param name="seed">Used to create a random seed for the distribution.</param>
+        /// <param name="name">A name for the operation</param>
+        /// <returns>A tensor of the specified shape filled with random uniform values.</returns>
+        public static Tensor random_uniform_int(int[] shape,
+            int minval = 0,
+            int maxval = 1,
+            TF_DataType dtype = TF_DataType.TF_FLOAT,
+            int? seed = null,
+            string name = null)
+        {
+            return tf_with(ops.name_scope(name, "random_uniform_int", new { shape, minval, maxval }), scope =>
+            {
+                name = scope;
+                var (seed1, seed2) = random_seed.get_seed(seed);
+                var tensorShape = tensor_util.shape_tensor(shape);
+                var minTensor = ops.convert_to_tensor(minval, dtype: dtype, name: "min");
+                var maxTensor = ops.convert_to_tensor(maxval, dtype: dtype, name: "max");
+                return gen_random_ops.random_uniform_int(tensorShape, minTensor, maxTensor, seed: seed1, seed2: seed2);
+            });
+        }
+
         public static Tensor random_uniform(Tensor shape,
             int minval = 0,
             Tensor maxval = null,
@@ -116,7 +144,7 @@ namespace Tensorflow
         public static Tensor random_shuffle(Tensor value, int? seed = null, string name = null)
         {
             var (seed1, seed2) = random_seed.get_seed(seed);
-            return gen_random_ops.random_shuffle(value, seed: seed1 ?? 0, seed2: seed2 ?? 0, name: name);
+            return gen_random_ops.random_shuffle(value, seed: seed1, seed2: seed2, name: name);
         }
 
         public static Tensor truncated_normal(int[] shape,
