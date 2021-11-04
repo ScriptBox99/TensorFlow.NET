@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Tensorflow.Keras.Losses;
 using Tensorflow.Keras.Metrics;
 using static Tensorflow.KerasApi;
 
@@ -62,8 +63,8 @@ namespace Tensorflow.Keras.Engine
             {
                 var y_t_rank = y_t.rank;
                 var y_p_rank = y_p.rank;
-                var y_t_last_dim = y_t.shape[y_t.shape.Length - 1];
-                var y_p_last_dim = y_p.shape[y_p.shape.Length - 1];
+                var y_t_last_dim = y_t.shape[y_t.shape.ndim - 1];
+                var y_p_last_dim = y_p.shape[y_p.shape.ndim - 1];
 
                 bool is_binary = y_p_last_dim == 1;
                 bool is_sparse_categorical = (y_t_rank < y_p_rank || y_t_last_dim == 1) && y_p_last_dim > 1;
@@ -74,11 +75,15 @@ namespace Tensorflow.Keras.Engine
                     metric_obj = keras.metrics.sparse_categorical_accuracy;
                 else
                     metric_obj = keras.metrics.categorical_accuracy;
-
-                return new MeanMetricWrapper(metric_obj, metric);
             }
+            else if(metric == "mean_absolute_error" || metric == "mae")
+                metric_obj = keras.metrics.mean_absolute_error;
+            else if (metric == "mean_absolute_percentage_error" || metric == "mape")
+                metric_obj = keras.metrics.mean_absolute_percentage_error;
+            else
+                throw new NotImplementedException("");
 
-            throw new NotImplementedException("");
+            return new MeanMetricWrapper(metric_obj, metric);
         }
 
         public IEnumerable<Metric> metrics

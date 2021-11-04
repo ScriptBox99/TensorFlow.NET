@@ -13,6 +13,7 @@ namespace Tensorflow.Functions
     public class ConcreteFunction
     {
         FuncGraph func_graph;
+        ForwardBackwardCall forward_backward;
         public Tensor[] Inputs => func_graph.Inputs;
         public Tensor[] CapturedInputs => func_graph.external_captures;
 
@@ -71,8 +72,8 @@ namespace Tensorflow.Functions
             func_graph.Exit();
         }
 
-        public ConcreteFunction(Func<Tensors, Tensors> func,
-            TF_DataType[] dtypes, TensorShape[] shapes)
+        /*public ConcreteFunction(Func<Tensors, Tensors> func,
+            TF_DataType[] dtypes, Shape[] shapes)
         {
             string func_name = $"{func.Method.Name}_{ops.uid_function()}";
 
@@ -89,7 +90,7 @@ namespace Tensorflow.Functions
             var opers = func_graph._nodes_by_name.Values.Select(x => x as Operation).ToArray();
             func_graph.ToGraph(opers, inputs, Outputs, null);
             func_graph.Exit();
-        }
+        }*/
 
         public void ToGraph(Tensors inputs, Tensors outputs)
         {
@@ -151,7 +152,8 @@ namespace Tensorflow.Functions
                 return tf.Runner.Execute(tf.Context, func_graph.FuncName, func_graph.Outputs.Length, args, attrs);
             }
 
-            var forward_backward = SelectForwardAndBackwardFunctions(args, possible_gradient_type, executing_eagerly);
+            if (forward_backward == null)
+                forward_backward = SelectForwardAndBackwardFunctions(args, possible_gradient_type, executing_eagerly);
             var (forward_function, args_with_tangents) = forward_backward.Forward();
             Tensors flat_outputs = null;
             if (executing_eagerly)

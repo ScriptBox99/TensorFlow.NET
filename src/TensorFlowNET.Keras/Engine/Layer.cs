@@ -66,13 +66,15 @@ namespace Tensorflow.Keras.Engine
         protected List<IVariableV1> non_trainable_weights;
         public List<IVariableV1> non_trainable_variables => non_trainable_weights;
 
+        protected int id;
+        public int Id => id;
         protected string name;
         protected string base_name;
         public string Name => name;
 
         protected bool computePreviousMask;
         protected List<Operation> updates;
-        public TensorShape BatchInputShape => args.BatchInputShape;
+        public Shape BatchInputShape => args.BatchInputShape;
 
         List<INode> inboundNodes;
         public List<INode> InboundNodes => inboundNodes;
@@ -84,7 +86,7 @@ namespace Tensorflow.Keras.Engine
         public CallContext CallContext => callContext.Value;
         public Tensor[] input => inboundNodes[0].input_tensors;
         public Dictionary<int, List<INode>> NodesByDepth { get; set; }
-        public TensorShape output_shape => inboundNodes[0].Outputs.shape;
+        public Shape output_shape => inboundNodes[0].Outputs.shape;
         public Layer(LayerArgs args)
         {
             this.args = args;
@@ -96,6 +98,7 @@ namespace Tensorflow.Keras.Engine
             built = false;
             SupportsMasking = false;
 
+            id = ops.uid_layer();
             _init_set_name(args.Name);
             trainable_weights = new List<IVariableV1>();
             non_trainable_weights = new List<IVariableV1>();
@@ -108,14 +111,14 @@ namespace Tensorflow.Keras.Engine
             // Manage input shape information if passed.
             if (args.BatchInputShape == null && args.InputShape != null)
             {
-                args.BatchInputShape = new int[] { args.BatchSize }.Concat(args.InputShape.dims).ToArray();
+                args.BatchInputShape = new long[] { args.BatchSize }.Concat(args.InputShape.dims).ToArray();
             }
         }
 
         bool _in_functional_construction_mode(Tensors inputs)
         {
             return tf.Context.executing_eagerly()
-                && inputs.Count(x => !x.IsEagerTensor) == inputs.Count();
+                && inputs.Count(x => x.IsCreatedInGraphMode) == inputs.Count();
         }
 
         public void SetConnectivityMetadata(Tensors inputs, Tensors outputs)
@@ -158,7 +161,7 @@ namespace Tensorflow.Keras.Engine
         /// <returns></returns>
         protected virtual Tensors Call(Tensors inputs, Tensor state = null, bool? training = null)
         {
-            throw new NotImplementedException("");
+            return inputs;
         }
 
         protected virtual string _name_scope()
@@ -177,7 +180,7 @@ namespace Tensorflow.Keras.Engine
             tf.init_scope();
 
             bool need_restore_mode = false;
-            if (inputs.IsEagerTensor || tf.Context.is_build_function())
+            if (!inputs.IsCreatedInGraphMode || tf.Context.is_build_function())
             {
                 need_restore_mode = true;
                 tf.Context.eager_mode(isFunc: tf.Context.is_build_function());

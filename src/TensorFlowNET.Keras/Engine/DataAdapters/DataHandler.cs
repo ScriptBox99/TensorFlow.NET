@@ -14,13 +14,13 @@ namespace Tensorflow.Keras.Engine.DataAdapters
         IDataAdapter _adapter;
         public IDataAdapter DataAdapter => _adapter;
         IDatasetV2 _dataset;
-        int _inferred_steps;
-        public int Inferredsteps => _inferred_steps;
-        int _current_step;
-        int _step_increment;
-        public int StepIncrement => _step_increment;
+        long _inferred_steps;
+        public long Inferredsteps => _inferred_steps;
+        long _current_step;
+        long _step_increment;
+        public long StepIncrement => _step_increment;
         bool _insufficient_data;
-        int _steps_per_execution_value;
+        long _steps_per_execution_value;
         int _initial_epoch => args.InitialEpoch;
         int _epochs => args.Epochs;
         IVariableV1 _steps_per_execution;
@@ -30,8 +30,8 @@ namespace Tensorflow.Keras.Engine.DataAdapters
             this.args = args;
             if (args.StepsPerExecution == null)
             {
-                _steps_per_execution = tf.Variable(1);
-                _steps_per_execution_value = 1;
+                _steps_per_execution = tf.Variable(1L);
+                _steps_per_execution_value = 1L;
             }
             else
             {
@@ -78,7 +78,7 @@ namespace Tensorflow.Keras.Engine.DataAdapters
             _insufficient_data = false;
         }
 
-        int _infer_steps(int steps_per_epoch, IDatasetV2 dataset)
+        long _infer_steps(int steps_per_epoch, IDatasetV2 dataset)
         {
             if (steps_per_epoch > -1)
                 return steps_per_epoch;
@@ -87,7 +87,7 @@ namespace Tensorflow.Keras.Engine.DataAdapters
             if (adapter_steps > -1)
                 return adapter_steps;
 
-            var size = dataset.dataset_cardinality();
+            var size = dataset.cardinality();
             return size.numpy();
         }
 
@@ -100,9 +100,10 @@ namespace Tensorflow.Keras.Engine.DataAdapters
                 using var data_iterator = new OwnedIterator(_dataset);
                 yield return (epoch, data_iterator);
             }
+            // _adapter.on_epoch_end()
         }
 
-        public IEnumerable<int> steps()
+        public IEnumerable<long> steps()
         {
             _current_step = 0;
             while (_current_step < _inferred_steps)

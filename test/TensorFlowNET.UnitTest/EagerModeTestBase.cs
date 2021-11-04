@@ -14,9 +14,10 @@ namespace TensorFlowNET.UnitTest
             tf.Context.ensure_initialized();
         }
 
-        [TestCleanup]
-        public void TestClean()
+        public bool Equal(float f1, float f2)
         {
+            var tolerance = .000001f;
+            return Math.Abs(f1 - f2) <= tolerance;
         }
 
         public bool Equal(float[] f1, float[] f2)

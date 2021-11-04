@@ -127,7 +127,7 @@ namespace Tensorflow
             _nodes_by_id = new Dictionary<int, ITensorOrOperation>();
             _nodes_by_name = new Dictionary<string, ITensorOrOperation>();
             _names_in_use = new Dictionary<string, int>();
-            _graph_key = $"grap-key-{ops.uid()}/";
+            _graph_key = $"graph-{ops.GraphUniqueId()}/";
         }
 
         public Graph(IntPtr handle)
@@ -136,7 +136,7 @@ namespace Tensorflow
             _nodes_by_id = new Dictionary<int, ITensorOrOperation>();
             _nodes_by_name = new Dictionary<string, ITensorOrOperation>();
             _names_in_use = new Dictionary<string, int>();
-            _graph_key = $"grap-key-{ops.uid()}/";
+            _graph_key = $"grap-{ops.GraphUniqueId()}/";
         }
 
         public ITensorOrOperation as_graph_element(object obj, bool allow_tensor = true, bool allow_operation = true)
@@ -515,20 +515,20 @@ namespace Tensorflow
             return (Tensor)this.as_graph_element(name, allow_tensor: true, allow_operation: false);
         }
 
-        public TensorShape GetTensorShape(TF_Output output)
+        public Shape GetTensorShape(TF_Output output)
         {
             var status = tf.Status;
             var ndim = c_api.TF_GraphGetTensorNumDims(_handle, output, status.Handle);
             status.Check();
 
             if (ndim == -1)
-                return new TensorShape();
+                return Shape.Null;
 
             var dims = new long[ndim];
             c_api.TF_GraphGetTensorShape(_handle, output, dims, dims.Length, status.Handle);
             status.Check();
 
-            return new TensorShape(dims.Select(x => (int)x).ToArray());
+            return new Shape(dims.Select(x => (int)x).ToArray());
         }
 
         public virtual void Exit()

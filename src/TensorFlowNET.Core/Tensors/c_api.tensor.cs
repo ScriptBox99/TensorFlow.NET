@@ -17,6 +17,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Tensorflow.NumPy;
 
 namespace Tensorflow
 {
@@ -31,7 +32,7 @@ namespace Tensorflow
         /// <param name="len">size_t</param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern IntPtr TF_AllocateTensor(TF_DataType dtype, long[] dims, int num_dims, ulong len);
+        public static extern SafeTensorHandle TF_AllocateTensor(TF_DataType dtype, long[] dims, int num_dims, ulong len);
 
         /// <summary>
         /// returns the sizeof() for the underlying type corresponding to the given TF_DataType enum value.
@@ -56,7 +57,7 @@ namespace Tensorflow
         /// <param name="dim_index"></param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern long TF_Dim(IntPtr tensor, int dim_index);
+        public static extern long TF_Dim(SafeTensorHandle tensor, int dim_index);
 
         /// <summary>
         /// Return a new tensor that holds the bytes data[0,len-1]
@@ -100,8 +101,42 @@ namespace Tensorflow
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe IntPtr TF_NewTensor(TF_DataType dataType, long[] dims, int num_dims, IntPtr data, ulong len)
         {
-            return c_api.TF_NewTensor(dataType, dims, num_dims, data, len, EmptyDeallocator, DeallocatorArgs.Empty);
+            return TF_NewTensor(dataType, dims, num_dims, data, len, EmptyDeallocator, DeallocatorArgs.Empty);
         }
+
+        public static unsafe SafeTensorHandle TF_NewTensor(byte[] data, Shape shape, TF_DataType dtype)
+        {
+            var length = data.Length;
+            var handle = TF_AllocateTensor(dtype, shape.dims, shape.ndim, (ulong)length);
+            var tensor = TF_TensorData(handle);
+            if (tensor == IntPtr.Zero)
+                throw new TensorflowException("AllocateTensor failed.");
+            fixed (void* addr = &data[0])
+                System.Buffer.MemoryCopy(addr, tensor.ToPointer(), length, length);
+            return handle;
+        }
+
+        public static unsafe SafeTensorHandle TF_NewTensor(Shape shape, TF_DataType dtype, void* data)
+        {
+            var length = shape.size * dtype.get_datatype_size();
+            var handle = TF_AllocateTensor(dtype, shape.dims, shape.ndim, (ulong)length);
+            var tensor = TF_TensorData(handle);
+            if (tensor == IntPtr.Zero)
+                throw new TensorflowException("AllocateTensor failed.");
+            if (data != null)
+                System.Buffer.MemoryCopy(data, tensor.ToPointer(), length, length);
+            return handle;
+        }
+
+        public static unsafe SafeTensorHandle TF_NewTensor<T>(T value)
+            where T : unmanaged
+        {
+            var dtype = value.GetType().as_tf_dtype();
+            var handle = TF_AllocateTensor(dtype, new long[0], 0, (ulong)dtype.get_datatype_size());
+            *(T*)TF_TensorData(handle) = value;
+            return handle;
+        }
+
         /// <summary>
         /// Return a new tensor that holds the bytes data[0,len-1]
         /// </summary>
@@ -122,7 +157,7 @@ namespace Tensorflow
         /// <param name="tensor"></param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern int TF_NumDims(IntPtr tensor);
+        public static extern int TF_NumDims(SafeTensorHandle tensor);
 
         /// <summary>
         /// Return the size of the underlying data in bytes.
@@ -130,7 +165,7 @@ namespace Tensorflow
         /// <param name="tensor"></param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern ulong TF_TensorByteSize(IntPtr tensor);
+        public static extern ulong TF_TensorByteSize(SafeTensorHandle tensor);
 
         /// <summary>
         /// Return a pointer to the underlying data buffer.
@@ -138,7 +173,7 @@ namespace Tensorflow
         /// <param name="tensor"></param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern IntPtr TF_TensorData(IntPtr tensor);
+        public static extern IntPtr TF_TensorData(SafeTensorHandle tensor);
 
         /// <summary>
         /// Deletes `tensor` and returns a new TF_Tensor with the same content if
@@ -147,7 +182,7 @@ namespace Tensorflow
         /// <param name="tensor"></param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern IntPtr TF_TensorMaybeMove(IntPtr tensor);
+        public static extern SafeTensorHandle TF_TensorMaybeMove(SafeTensorHandle tensor);
 
         /// <summary>
         /// Return the type of a tensor element.
@@ -155,7 +190,7 @@ namespace Tensorflow
         /// <param name="tensor"></param>
         /// <returns></returns>
         [DllImport(TensorFlowLibName)]
-        public static extern TF_DataType TF_TensorType(IntPtr tensor);
+        public static extern TF_DataType TF_TensorType(SafeTensorHandle tensor);
 
         /// <summary>
         /// Return the size in bytes required to encode a string `len` bytes long into a
@@ -197,7 +232,7 @@ namespace Tensorflow
         public static extern IntPtr TF_StringGetDataPointer(IntPtr tst);
 
         [DllImport(TensorFlowLibName)]
-        public static extern TF_TString_Type TF_StringGetType(IntPtr tst);
+        public static extern TF_TString_Type TF_StringGetType(SafeTensorHandle tst);
 
         [DllImport(TensorFlowLibName)]
         public static extern ulong TF_StringGetSize(IntPtr tst);

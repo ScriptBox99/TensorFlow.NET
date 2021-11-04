@@ -1,4 +1,4 @@
-﻿using NumSharp;
+﻿using Tensorflow.NumPy;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,7 +49,7 @@ namespace Tensorflow.Keras.Engine
             Binding.tf_output_redirect.WriteLine($"Testing...");
             foreach (var (epoch, iterator) in data_handler.enumerate_epochs())
             {
-                // reset_metrics();
+                reset_metrics();
                 // callbacks.on_epoch_begin(epoch)
                 // data_handler.catch_stop_iteration();
                 IEnumerable<(string, Tensor)> results = null;
@@ -60,6 +60,33 @@ namespace Tensorflow.Keras.Engine
                 }
                 Binding.tf_output_redirect.WriteLine($"iterator: {epoch + 1}, " + string.Join(", ", results.Select(x => $"{x.Item1}: {(float)x.Item2}")));
             }
+        }
+
+        public KeyValuePair<string, float>[] evaluate(IDatasetV2 x)
+        {
+            data_handler = new DataHandler(new DataHandlerArgs
+            {
+                Dataset = x,
+                Model = this,
+                StepsPerExecution = _steps_per_execution
+            });
+
+            Binding.tf_output_redirect.WriteLine($"Testing...");
+            IEnumerable<(string, Tensor)> logs = null;
+            foreach (var (epoch, iterator) in data_handler.enumerate_epochs())
+            {
+                reset_metrics();
+                // callbacks.on_epoch_begin(epoch)
+                // data_handler.catch_stop_iteration();
+                
+                foreach (var step in data_handler.steps())
+                {
+                    // callbacks.on_train_batch_begin(step)
+                    logs = test_function(iterator);
+                }
+                Binding.tf_output_redirect.WriteLine($"iterator: {epoch + 1}, " + string.Join(", ", logs.Select(x => $"{x.Item1}: {(float)x.Item2}")));
+            }
+            return logs.Select(x => new KeyValuePair<string, float>(x.Item1, (float)x.Item2)).ToArray();
         }
 
         IEnumerable<(string, Tensor)> test_function(OwnedIterator iterator)

@@ -298,7 +298,7 @@ namespace Tensorflow.Eager
                 c_api.TFE_OpSetAttrStringList(op, key, values3, values3.Select(x => Convert.ToUInt64(x.Length)).ToArray(), values3.Length);
                 attr_list_sizes[key] = values3.Length;
             }
-            else if (type == TF_AttrType.TF_ATTR_SHAPE && values is TensorShape[] values1)
+            else if (type == TF_AttrType.TF_ATTR_SHAPE && values is Shape[] values1)
             {
                 // Make one pass through the input counting the total number of
                 // dims across all the input lists.
@@ -310,7 +310,7 @@ namespace Tensorflow.Eager
                 for (int i = 0; i < num_values; ++i)
                 {
                     dims[i] = Marshal.AllocHGlobal(sizeof(long) * values1[i].ndim);
-                    tf.memcpy(dims[i], values1[i].dims.Select(x => (long)x).ToArray(), values1[i].ndim * sizeof(long));
+                    tf.memcpy(dims[i], values1[i].dims, values1[i].ndim * sizeof(long));
                 }
 
                 c_api.TFE_OpSetAttrShapeList(op, key, dims, num_dims, num_values, status.Handle);
@@ -360,7 +360,7 @@ namespace Tensorflow.Eager
                     c_api.TFE_OpSetAttrFloat(op, key, Convert.ToSingle(value));
                     break;
                 case TF_AttrType.TF_ATTR_SHAPE:
-                    var dims = (value as int[]).Select(x => (long)x).ToArray();
+                    var dims = (value as long[]).ToArray();
                     c_api.TFE_OpSetAttrShape(op, key, dims, dims.Length, status.Handle);
                     status.Check(true);
                     break;

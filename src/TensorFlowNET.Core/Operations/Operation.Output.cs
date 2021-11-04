@@ -23,7 +23,7 @@ namespace Tensorflow
 {
     public partial class Operation
     {
-        public int NumOutputs => c_api.TF_OperationNumOutputs(_handle);
+        public int NumOutputs => _handle == IntPtr.Zero ? -1 : c_api.TF_OperationNumOutputs(_handle);
         public TF_DataType OutputType(int index) => c_api.TF_OperationOutputType(_tf_output(index));
 
         public int OutputListLength(string name)
@@ -38,7 +38,7 @@ namespace Tensorflow
         public virtual Tensor[] outputs => _outputs;
         public Tensor output => _outputs.FirstOrDefault();
 
-        public int NumControlOutputs => c_api.TF_OperationNumControlOutputs(_handle);
+        public int NumControlOutputs => _handle == IntPtr.Zero ? -1 : c_api.TF_OperationNumControlOutputs(_handle);
 
         public int OutputNumConsumers(int index) => c_api.TF_OperationOutputNumConsumers(new TF_Output(_handle, index));
 
@@ -66,7 +66,7 @@ namespace Tensorflow
             var inputptr = (TF_Input*)handle;
             for (int i = 0; i < num; i++)
                 consumers[i] = *(inputptr + i);
-
+            Marshal.FreeHGlobal(handle);
             return consumers;
         }
 
@@ -83,6 +83,7 @@ namespace Tensorflow
                     var handle = control_output_handle + Marshal.SizeOf<IntPtr>() * i;
                     control_outputs[i] = new Operation(*(IntPtr*)handle);
                 }
+                Marshal.FreeHGlobal(control_output_handle);
             }
 
             return control_outputs;

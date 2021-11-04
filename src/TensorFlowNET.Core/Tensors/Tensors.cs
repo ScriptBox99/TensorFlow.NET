@@ -1,4 +1,4 @@
-﻿using NumSharp;
+﻿using Tensorflow.NumPy;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,10 +18,10 @@ namespace Tensorflow
         List<Tensor> items = new List<Tensor>();
 
         public TF_DataType dtype => items.First().dtype;
-        public TensorShape shape => items.First().TensorShape;
+        public Shape shape => items.First().shape;
         public int rank => items.First().rank;
         public Graph graph => items.First().graph;
-        public bool IsEagerTensor => items.First().IsEagerTensor;
+        public bool IsCreatedInGraphMode => items.First().IsCreatedInGraphMode;
         public bool IsList { get; set; }
         public int Length => items.Count();
 
@@ -38,6 +38,8 @@ namespace Tensorflow
             }
         }
 
+        public Tensor this[params string[] slices]
+            => items.First()[slices];
         public Tensors(params Tensor[] tensors)
         {
             items.AddRange(tensors);
@@ -77,6 +79,7 @@ namespace Tensorflow
         public static implicit operator Tensors((Tensor, Tensor) tuple)
             => new Tensors(tuple.Item1, tuple.Item2);
 
+        [AutoNumPy]
         public static implicit operator Tensors(NDArray nd)
             => new Tensors(nd);
 

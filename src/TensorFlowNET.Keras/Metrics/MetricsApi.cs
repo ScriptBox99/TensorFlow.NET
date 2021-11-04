@@ -25,11 +25,11 @@ namespace Tensorflow.Keras.Metrics
         /// <returns>Sparse categorical accuracy values.</returns>
         public Tensor sparse_categorical_accuracy(Tensor y_true, Tensor y_pred)
         {
-            var y_pred_rank = y_pred.TensorShape.ndim;
-            var y_true_rank = y_true.TensorShape.ndim;
+            var y_pred_rank = y_pred.shape.ndim;
+            var y_true_rank = y_true.shape.ndim;
             // If the shape of y_true is (num_samples, 1), squeeze to (num_samples,)
             if (y_true_rank != -1 && y_pred_rank != -1
-                && y_true.shape.Length == y_pred.shape.Length)
+                && y_true.shape.ndim == y_pred.shape.ndim)
                 y_true = array_ops.squeeze(y_true, axis: new[] { -1 });
             y_pred = math_ops.argmax(y_pred, -1);
 
@@ -39,6 +39,19 @@ namespace Tensorflow.Keras.Metrics
                 y_pred = math_ops.cast(y_pred, y_true.dtype);
 
             return math_ops.cast(math_ops.equal(y_true, y_pred), TF_DataType.TF_FLOAT);
+        }
+
+        public Tensor mean_absolute_error(Tensor y_true, Tensor y_pred)
+        {
+            y_true = math_ops.cast(y_true, y_pred.dtype);
+            return keras.backend.mean(math_ops.abs(y_pred - y_true), axis: -1);
+        }
+
+        public Tensor mean_absolute_percentage_error(Tensor y_true, Tensor y_pred)
+        {
+            y_true = math_ops.cast(y_true, y_pred.dtype);
+            var diff = (y_true - y_pred) / math_ops.maximum(math_ops.abs(y_true), keras.backend.epsilon());
+            return 100f * keras.backend.mean(math_ops.abs(diff), axis: -1);
         }
     }
 }

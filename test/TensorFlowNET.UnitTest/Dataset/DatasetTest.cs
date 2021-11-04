@@ -65,7 +65,7 @@ namespace TensorFlowNET.UnitTest.Dataset
         {
             var X = new[] { 2013, 2014, 2015, 2016, 2017 };
 
-            var dataset = tf.data.Dataset.from_tensor(X);
+            var dataset = tf.data.Dataset.from_tensors(X);
             int n = 0;
             foreach (var x in dataset)
             {
@@ -147,9 +147,33 @@ namespace TensorFlowNET.UnitTest.Dataset
         public void Cardinality()
         {
             var dataset = tf.data.Dataset.range(10);
+            var cardinality = dataset.cardinality();
+            Assert.AreEqual(cardinality.numpy(), 10L);
             dataset = dataset.map(x => x[0] + 1);
-            var cardinality = dataset.dataset_cardinality();
-            Assert.AreEqual(new long[] { 10 }, cardinality.numpy());
+            cardinality = dataset.cardinality();
+            Assert.AreEqual(cardinality.numpy(), 10L);
+        }
+
+        [TestMethod]
+        public void CardinalityWithAutoTune()
+        {
+            var dataset = tf.data.Dataset.range(10);
+            dataset = dataset.map(x => x, num_parallel_calls: -1);
+            var cardinality = dataset.cardinality();
+            Assert.AreEqual(cardinality.numpy(), 10L);
+        }
+
+        [TestMethod]
+        public void CardinalityWithRepeat()
+        {
+            var dataset = tf.data.Dataset.range(10);
+            dataset = dataset.repeat();
+            var cardinality = dataset.cardinality();
+            Assert.IsTrue((cardinality == tf.data.INFINITE_CARDINALITY).numpy());
+
+            dataset = dataset.filter(x => true);
+            cardinality = dataset.cardinality();
+            Assert.IsTrue((cardinality == tf.data.UNKNOWN_CARDINALITY).numpy());
         }
 
         [TestMethod]

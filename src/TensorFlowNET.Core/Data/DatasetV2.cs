@@ -19,11 +19,13 @@ namespace Tensorflow
 
         public TensorSpec[] structure { get; set; }
 
-        public TensorShape[] output_shapes => structure.Select(x => x.shape).ToArray();
+        public Shape[] output_shapes => structure.Select(x => x.shape).ToArray();
 
         public TF_DataType[] output_types => structure.Select(x => x.dtype).ToArray();
 
         public TensorSpec[] element_spec => structure;
+
+        public int length => cardinality().numpy();
 
         public IDatasetV2 cache(string filename = "")
             => new CacheDataset(this, filename: filename);
@@ -66,7 +68,15 @@ namespace Tensorflow
                 use_legacy_function: use_legacy_function);
 
         public IDatasetV2 map(Func<Tensors, Tensors> map_func, int num_parallel_calls)
-            => new ParallelMapDataset(this, map_func, num_parallel_calls: num_parallel_calls);
+            => new ParallelMapDataset(this, map_func, 
+                num_parallel_calls: num_parallel_calls,
+                preserve_cardinality: true);
+
+        public IDatasetV2 filter(Func<Tensors, Tensors> predicate_func)
+            => new FilterDataset(this, predicate_func);
+
+        public IDatasetV2 filter(Func<Tensor, bool> predicate_func)
+            => new FilterDataset(this, predicate_func);
 
         public OwnedIterator make_one_shot_iterator()
         {
@@ -103,13 +113,15 @@ namespace Tensorflow
             // (3) Apply graph rewrite options
             var graph_rewrites = new[]
             {
-                "noop_elimination",
                 "map_and_batch_fusion",
+                "map_parallelization",
+                "noop_elimination",
                 "shuffle_and_repeat_fusion"
             };
             var graph_rewrite_configs = new string[]
             {
                 "autotune_buffer_sizes:autotune:true",
+                "batch_parallelization:autotune:true",
                 "disable_prefetch_legacy_autotune:autotune:true",
                 "enable_gradient_descent:autotune:true",
                 "map_parallelization:autotune:true"
@@ -122,11 +134,13 @@ namespace Tensorflow
             return dataset;
         }
 
-        public Tensor dataset_cardinality(string name = null)
+        public Tensor cardinality(string name = null)
             => tf.Context.ExecuteOp("DatasetCardinality", name, new ExecuteOpArgs(variant_tensor));
 
         public override string ToString()
-            => $"{GetType().Name} shapes: {string.Join(", ", structure.Select(x => x.shape))}, types: {string.Join(", ", structure.Select(x => "tf." + x.dtype.as_numpy_name()))}";
+            => $"{GetType().Name} shapes: {string.Join(", ", structure.Select(x => x.shape))}, " +
+            $"types: {string.Join(", ", structure.Select(x => "tf." + x.dtype.as_numpy_name()))}, " +
+            $"len: {length}";
 
         public IEnumerator<(Tensor, Tensor)> GetEnumerator()
         {

@@ -265,10 +265,8 @@ namespace Tensorflow
         }
 
         public static Tensor[] unpack(Tensor value, int num, int axis = 0, string name = null)
-        {
-            var _op = tf.OpDefLib._apply_op_helper("Unpack", name, new { value, num, axis });
-            return _op.outputs;
-        }
+            => tf.Context.ExecuteOp("Unpack", name, new ExecuteOpArgs(value, num)
+                    .SetAttributes(new { axis }));
 
         public static Tensor where(Tensor condition, string name = null)
         {
@@ -482,11 +480,7 @@ namespace Tensorflow
         /// <param name="name"> A name for the operation (optional).</param>
         /// <returns> `Tensor`. Has the same type as `s0`.</returns>
         public static Tensor broadcast_args(Tensor s0, Tensor s1, string name = null)
-        {
-            var _op = tf.OpDefLib._apply_op_helper("BroadcastArgs", name, args: new { s0, s1, name });
-
-            return _op.outputs[0];
-        }
+            => tf.Context.ExecuteOp("BroadcastArgs", name, new ExecuteOpArgs(s0, s1));
 
         /// <summary>
         /// Broadcast an array for a compatible shape.

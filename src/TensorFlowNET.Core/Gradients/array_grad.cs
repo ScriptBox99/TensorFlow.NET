@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Tensorflow.Eager;
 using Tensorflow.Framework;
+using Tensorflow.NumPy;
 using static Tensorflow.Binding;
 
 namespace Tensorflow.Gradients
@@ -201,7 +202,7 @@ namespace Tensorflow.Gradients
             // For axis 0 gathers, build an appropriately shaped IndexedSlices.
             if ((int)axis_static == 0)
             {
-                var params_tail_shape = params_shape.slice(new NumSharp.Slice(start: 1));
+                var params_tail_shape = params_shape.slice(new Slice(start: 1));
                 var values_shape = array_ops.concat(new[] { indices_size, params_tail_shape }, 0);
                 var values = array_ops.reshape(grad, values_shape);
                 indices = array_ops.reshape(indices, indices_size);
@@ -220,6 +221,22 @@ namespace Tensorflow.Gradients
         public static Tensor[] _ReshapeGrad(Operation op, Tensor[] grads)
         {
             return new Tensor[] { array_ops.reshape(grads[0], array_ops.shape(op.inputs[0])), null };
+        }
+
+        [RegisterGradient("Pack")]
+        public static Tensor[] _PackGrad(Operation op, Tensor[] grads)
+        {
+            var grad = grads[0];
+            var num = op.get_attr<int>("N");
+            var axis = op.get_attr<int>("axis");
+            return array_ops.unstack(grad, num: num, axis: axis);
+        }
+
+        [RegisterGradient("Unpack")]
+        public static Tensor[] _UnpackGrad(Operation op, Tensor[] grads)
+        {
+            var axis = op.get_attr<int>("axis");
+            return new[] { array_ops.stack(grads, axis: axis) };
         }
 
         [RegisterGradient("Pad")]
