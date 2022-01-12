@@ -16,27 +16,25 @@
 
 using System;
 using Tensorflow.Util;
-using static Tensorflow.Binding;
 
 namespace Tensorflow.Eager
 {
-    public sealed class SafeTensorHandleHandle : SafeTensorflowHandle
+    public sealed class SafeEagerOpHandle : SafeTensorflowHandle
     {
-        private SafeTensorHandleHandle()
+        private SafeEagerOpHandle()
         {
+
         }
 
-        public SafeTensorHandleHandle(IntPtr handle)
+        public SafeEagerOpHandle(IntPtr handle)
             : base(handle)
         {
+
         }
 
         protected override bool ReleaseHandle()
         {
-#if TRACK_TENSOR_LIFE
-            print($"Delete EagerTensorHandle 0x{handle.ToString("x16")}");
-#endif
-            c_api.TFE_DeleteTensorHandle(handle);
+            c_api.TFE_DeleteOp(handle);
             SetHandle(IntPtr.Zero);
             return true;
         }

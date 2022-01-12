@@ -15,7 +15,9 @@ namespace Tensorflow.Eager
     /// </summary>
     public partial class EagerRunner
     {
-        UnorderedMap<Context, SafeOpHandle> thread_local_eager_operation_map = new UnorderedMap<Context, SafeOpHandle>();
+        UnorderedMap<string, SafeEagerOpHandle> thread_local_eager_operation_map = new UnorderedMap<string, SafeEagerOpHandle>();
+        public void ClearEagerOperationMap()
+            => thread_local_eager_operation_map.Clear();
 
         public Tensor[] TFE_FastPathExecute(FastPathOpExecInfo op_exec_info)
         {
@@ -31,7 +33,7 @@ namespace Tensorflow.Eager
             op_exec_info.run_callbacks = op_exec_info.run_gradient_callback || op_exec_info.run_post_exec_callbacks;
 
             var status = tf.Status;
-            using var op = GetOp(op_exec_info.ctx, op_exec_info.op_name, status);
+            var op = GetOp(op_exec_info.ctx, op_exec_info.op_name, status);
 
             var op_def = tf.get_default_graph().GetOpDef(op_exec_info.op_name);
 
@@ -56,8 +58,8 @@ namespace Tensorflow.Eager
                 }
             }
 
-            c_api.TFE_OpSetDevice(op, op_exec_info.device_name, status.Handle);
-            status.Check(true);
+            // c_api.TFE_OpSetDevice(op, op_exec_info.device_name, status.Handle);
+            // status.Check(true);
 
             // Add inferred attrs and inputs.
             for (int i = 0; i < op_def.InputArg.Count; i++)
@@ -139,12 +141,11 @@ namespace Tensorflow.Eager
                 num_retvals += (int)delta;
             }
 
-            var retVals = new SafeTensorHandleHandle[num_retvals];
+            var retVals = new SafeEagerTensorHandle[num_retvals];
             c_api.TFE_Execute(op, retVals, out num_retvals, status.Handle);
             status.Check(true);
 
             var flat_result = retVals.Select(x => new EagerTensor(x)).ToArray();
-
 
             if (op_exec_info.run_callbacks)
             {
@@ -156,21 +157,21 @@ namespace Tensorflow.Eager
             return flat_result;
         }
 
-        SafeOpHandle GetOp(Context ctx, string op_or_function_name, Status status)
+        SafeEagerOpHandle GetOp(Context ctx, string op_or_function_name, Status status)
         {
-            /*if (thread_local_eager_operation_map.find(ctx, out var op))
+            if (thread_local_eager_operation_map.find(op_or_function_name, out var op))
                 c_api.TFE_OpReset(op, op_or_function_name, ctx.DeviceName, status.Handle);
             else
             {
                 op = c_api.TFE_NewOp(ctx.Handle, op_or_function_name, status.Handle);
-                thread_local_eager_operation_map[ctx] = op;
+                thread_local_eager_operation_map[op_or_function_name] = op;
             }
 
             status.Check(true);
-            return op;*/
-            var op = c_api.TFE_NewOp(ctx.Handle, op_or_function_name, status.Handle);
-            status.Check(true);
             return op;
+            /*var op = c_api.TFE_NewOp(ctx.Handle, op_or_function_name, status.Handle);
+            status.Check(true);
+            return op;*/
         }
 
         bool HasAccumulator()
@@ -204,7 +205,7 @@ namespace Tensorflow.Eager
             ArgDef input_arg,
             List<object> flattened_attrs,
             List<Tensor> flattened_inputs,
-            SafeOpHandle op,
+            SafeEagerOpHandle op,
             Status status)
         {
             var tensor = tf.convert_to_tensor(inputs);
@@ -212,7 +213,7 @@ namespace Tensorflow.Eager
 
             if (add_type_attr && !string.IsNullOrEmpty(input_arg.TypeAttr))
             {
-                var dtype = c_api.TFE_TensorHandleDataType(tensor.EagerTensorHandle);
+                var dtype = tensor.dtype;
                 c_api.TFE_OpSetAttrType(op, input_arg.TypeAttr, dtype);
                 flattened_attrs.Add(input_arg.TypeAttr);
                 flattened_attrs.Add(dtype);
@@ -224,7 +225,7 @@ namespace Tensorflow.Eager
             return true;
         }
 
-        public void SetOpAttrs(SafeOpHandle op, params object[] attrs)
+        public void SetOpAttrs(SafeEagerOpHandle op, params object[] attrs)
         {
             var status = tf.Status;
             var len = attrs.Length;
@@ -257,7 +258,7 @@ namespace Tensorflow.Eager
         /// <param name="attr_value"></param>
         /// <param name="attr_list_sizes"></param>
         /// <param name="status"></param>
-        void SetOpAttrWithDefaults(Context ctx, SafeOpHandle op, AttrDef attr,
+        void SetOpAttrWithDefaults(Context ctx, SafeEagerOpHandle op, AttrDef attr,
             string attr_name, object attr_value,
             Dictionary<string, long> attr_list_sizes,
             Status status)
@@ -268,16 +269,7 @@ namespace Tensorflow.Eager
 
             if (attr_value == null)
             {
-                if (is_list != 0)
-#pragma warning disable CS0642 // Possible mistaken empty statement
-                    ;
-#pragma warning restore CS0642 // Possible mistaken empty statement
-                //SetOpAttrListDefault
-                else
-#pragma warning disable CS0642 // Possible mistaken empty statement
-                    ;
-#pragma warning restore CS0642 // Possible mistaken empty statement
-                //SetOpAttrScalarDefault
+
             }
             else
             {
@@ -288,7 +280,7 @@ namespace Tensorflow.Eager
             }
         }
 
-        bool SetOpAttrList(Context ctx, SafeOpHandle op,
+        bool SetOpAttrList(Context ctx, SafeEagerOpHandle op,
             string key, object values, TF_AttrType type,
             Dictionary<string, long> attr_list_sizes,
             Status status)
@@ -334,7 +326,7 @@ namespace Tensorflow.Eager
             return true;
         }
 
-        bool SetOpAttrScalar(Context ctx, SafeOpHandle op,
+        bool SetOpAttrScalar(Context ctx, SafeEagerOpHandle op,
             string key, object value, TF_AttrType type,
             Dictionary<string, long> attr_list_sizes,
             Status status)

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using HDF.PInvoke;
 using HDF5CSharp;
-using Tensorflow.NumPy;
 using static Tensorflow.Binding;
 using Tensorflow.Keras.Saving;
 
@@ -11,7 +10,6 @@ namespace Tensorflow.Keras.Engine
 {
     public partial class Model
     {
-        List<(IVariableV1, NDArray)> LoadedWeights;
         public void load_weights(string filepath, bool by_name = false, bool skip_mismatch = false, object options = null)
         {
             long fileId = Hdf5.OpenFile(filepath, true);
@@ -31,7 +29,7 @@ namespace Tensorflow.Keras.Engine
                 throw new NotImplementedException("");
             else
             {
-                LoadedWeights = hdf5_format.load_weights_from_hdf5_group(fileId, Layers);
+                hdf5_format.load_weights_from_hdf5_group(fileId, Layers);
                 Hdf5.CloseFile(fileId);
             }
         }

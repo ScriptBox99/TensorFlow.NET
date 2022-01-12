@@ -194,6 +194,9 @@ namespace Tensorflow
                     case Axis val:
                         tensor_proto.IntVal.AddRange(val.axis);
                         break;
+                    case Shape val:
+                        tensor_proto.Int64Val.AddRange(val.dims);
+                        break;
                     case bool val:
                         tensor_proto.BoolVal.AddRange(new[] { val });
                         break;
@@ -233,9 +236,9 @@ namespace Tensorflow
                 return false;
             }
 
-            if (tensor.GetType() == typeof(EagerTensor))
+            if (tensor is EagerTensor eagerTensor)
             {
-                if(tensor.dtype == TF_DataType.TF_INT64)
+                if(tensor.dtype == tf.int64)
                     return new Shape(tensor.ToArray<long>());
                 else
                     return new Shape(tensor.ToArray<int>());
@@ -405,7 +408,7 @@ would not be rank 1.", tensor.op.get_attr("axis")));
 
             var ret = tensor.shape.unknown_shape((int)shape.dims[0]);
             var value = constant_value(tensor);
-            if (!(value is null))
+            if (value is not null)
             {
                 var d_ = new int[value.size];
                 foreach (var (index, d) in enumerate(value.ToArray<int>()))

@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Tensorflow.Util;
-using static Tensorflow.tensorflow;
 using static Tensorflow.Binding;
-using System.Linq;
-using Tensorflow.Eager;
 
 namespace Tensorflow.Gradients
 {
@@ -16,12 +13,12 @@ namespace Tensorflow.Gradients
         public void RecordOperation(string op_type,
             Tensor[] input_tensors,
             TapeTensor[] output_tensors,
-            Func<BackwardFunction> backward_function_getter)
+            BackwardFunction backward_function)
         {
             if (!ShouldRecord(input_tensors))
                 return;
 
-            var op_id = new EagerTensor(next_op_id_++);
+            var op_id = next_op_id_++;
             foreach (var i in input_tensors)
                 tensor_usage_[i]++;
 
@@ -32,12 +29,12 @@ namespace Tensorflow.Gradients
                 tensor_usage_[o.GetTensor()] = 1;
             }
 
-            op_tape_[op_id] = new OpTapeEntry<BackwardFunction, TapeTensor>
+            op_tape_[op_id] = new OpTapeEntry
             {
                 op_type = op_type,
                 output_tensor_info = output_tensors,
                 input_tensor_id = input_tensors,
-                backward_function = backward_function_getter()
+                backward_function = backward_function
             };
         }
     }

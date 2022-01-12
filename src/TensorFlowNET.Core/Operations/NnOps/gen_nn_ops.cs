@@ -191,10 +191,10 @@ namespace Tensorflow.Operations
         }
 
         public static Tensors fused_batch_norm_v3(Tensor x,
-            IVariableV1 scale,
-            IVariableV1 offset,
-            IVariableV1 mean,
-            IVariableV1 variance,
+            Tensor scale,
+            Tensor offset,
+            Tensor mean,
+            Tensor variance,
             float epsilon = 0.0001f,
             float exponential_avg_factor = 1.0f,
             string data_format = "NHWC",
@@ -254,6 +254,21 @@ namespace Tensorflow.Operations
         public static Tensor leaky_relu(Tensor features, float alpha = 0.2f, string name = null)
             => tf.Context.ExecuteOp("LeakyRelu", name,
                 new ExecuteOpArgs(features).SetAttributes(new { alpha }));
+
+        public static Tensor average_pool(Tensor input,
+            int[] ksize,
+            int[] strides,
+            string padding,
+            string data_format = "NHWC",
+            string name = null)
+                => tf.Context.ExecuteOp("AvgPool", name, new ExecuteOpArgs(input)
+                    .SetAttributes(new
+                    {
+                        ksize,
+                        strides,
+                        padding,
+                        data_format
+                    }));
 
         public static Tensor max_pool(Tensor input,
             int[] ksize,

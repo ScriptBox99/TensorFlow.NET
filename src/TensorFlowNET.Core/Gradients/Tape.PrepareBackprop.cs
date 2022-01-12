@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using Tensorflow.Util;
-using static Tensorflow.tensorflow;
 
 namespace Tensorflow.Gradients
 {
@@ -8,7 +7,7 @@ namespace Tensorflow.Gradients
     {
         public BackpropInitialState PrepareBackprop(Tensor[] target,
             TensorTape tensor_tape,
-            OpTape<BackwardFunction, TapeTensor> op_tape,
+            OpTape op_tape,
             UnorderedSet<Tensor> sources_set,
             bool persistent_tape)
         {
@@ -21,7 +20,7 @@ namespace Tensorflow.Gradients
                 if (!tensor_tape.find(tensor_id, out var op_id))
                     continue;
 
-                if (op_id == null ||
+                if (op_id == -1 ||
                     !op_tape.find(op_id, out var op_it) ||
                     result.op_tape.find(op_id, out var result_op_it))
                     continue;
@@ -46,7 +45,7 @@ namespace Tensorflow.Gradients
 
             foreach (var pair in result.tensor_usage_counts)
             {
-                if (tensor_tape.find(pair.Key, out var it) && it != null)
+                if (tensor_tape.find(pair.Key, out var it) && it != -1)
                     result.op_missing_tensor[it] += 1;
             }
 

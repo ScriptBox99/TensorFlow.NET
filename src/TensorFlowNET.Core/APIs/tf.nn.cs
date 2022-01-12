@@ -26,7 +26,7 @@ namespace Tensorflow
 
         public class nn_internal
         {
-            public Tensor conv2d(Tensor input, IVariableV1 filter, int[] strides, string padding, bool use_cudnn_on_gpu = true,
+            public Tensor conv2d(Tensor input, Tensor filter, int[] strides, string padding, bool use_cudnn_on_gpu = true,
                 string data_format = "NHWC", int[] dilations = null, string name = null)
             {
                 var parameters = new Conv2dParams
@@ -124,10 +124,10 @@ namespace Tensorflow
                 => gen_nn_ops.relu(features, name);
 
             public Tensor[] fused_batch_norm(Tensor x,
-                IVariableV1 scale,
-                IVariableV1 offset,
-                IVariableV1 mean = null,
-                IVariableV1 variance = null,
+                Tensor scale,
+                Tensor offset,
+                Tensor mean = null,
+                Tensor variance = null,
                 float epsilon = 0.001f,
                 string data_format = "NHWC",
                 bool is_training = true,
@@ -156,6 +156,9 @@ namespace Tensorflow
                     return gen_nn_ops.bias_add(value, bias, data_format: data_format, name: name);
                 });
             }
+
+            public Tensor l2_loss(Tensor t, string name = null)
+                => nn_ops.l2_loss(t, name: name);
 
             /// <summary>
             /// Local Response Normalization.

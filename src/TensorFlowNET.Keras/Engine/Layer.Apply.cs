@@ -14,37 +14,30 @@ namespace Tensorflow.Keras.Engine
         /// <returns></returns>
         public Tensors Apply(Tensors inputs, Tensor state = null, bool training = false)
         {
-            callContext = callContext ?? new ThreadLocal<CallContext>()
-            {
-                Value = new CallContext()
-            };
+            if (callContext.Value == null)
+                callContext.Value = new CallContext();
 
             if (_in_functional_construction_mode(inputs))
                 return FunctionalConstructionCall(inputs);
 
-            Tensors outputs = null;
-
             var eager = tf.executing_eagerly();
             using var ctxManager = CallContext.enter(build_graph: false);
 
-            string nameScope = "";
-            if (eager)
-                nameScope = Name;
-            else
-                nameScope = _name_scope();
+            string nameScope = eager ? name : _name_scope();
+            var scope = ops.name_scope(nameScope);
+            scope.__enter__();
 
-            tf_with(ops.name_scope(nameScope), scope =>
-            {
-                if (!built)
-                    MaybeBuild(inputs);
+            if (!built)
+                MaybeBuild(inputs);
 
-                outputs = Call(inputs, state: state, training: training);
+            var outputs = Call(inputs, state: state, training: training);
 
-                // memory leak
-                // _set_connectivity_metadata_(inputs, outputs);
-                _handle_activity_regularization(inputs, outputs);
-                _set_mask_metadata(inputs, outputs, null);
-            });
+            // memory leak
+            // _set_connectivity_metadata_(inputs, outputs);
+            _handle_activity_regularization(inputs, outputs);
+            _set_mask_metadata(inputs, outputs, null);
+
+            scope.__exit__();
 
             return outputs;
         }

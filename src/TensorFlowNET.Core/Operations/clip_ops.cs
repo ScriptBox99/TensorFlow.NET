@@ -14,12 +14,34 @@
    limitations under the License.
 ******************************************************************************/
 
+using System.Linq;
 using static Tensorflow.Binding;
 
 namespace Tensorflow
 {
     public class clip_ops
     {
+        public static (Tensors, Tensor) clip_by_global_norm(Tensor[] t_list, float clip_norm, Tensor use_norm = null, string name = null)
+        {
+            use_norm = global_norm(t_list, name);
+            return tf_with(ops.name_scope(name, "clip_by_global_norm", t_list), delegate
+            {
+                // Calculate L2-norm, clip elements by ratio of clip_norm to L2-norm
+                var scale_for_finite = clip_norm * math_ops.minimum(
+                    1.0f / use_norm,
+                    constant_op.constant(1.0, dtype: use_norm.dtype) / clip_norm);
+
+                // If use_norm is any finite number, this is a no-op. For inf/-inf/NaN,
+                // this will make scale NaN.
+                var scale = scale_for_finite + (use_norm - use_norm);
+
+                Tensors values_clipped = new Tensors();
+                foreach (var (i, v) in enumerate(t_list))
+                    values_clipped.Add(array_ops.identity(v * scale, name: $"{name}_{i}"));
+                return (values_clipped, use_norm);
+            });
+        }
+
         public static Tensor clip_by_value<T1, T2>(Tensor t, T1 clip_value_min, T2 clip_value_max, string name = null)
         {
             return tf_with(ops.name_scope(name, "clip_by_value", new { t, clip_value_min, clip_value_max }), delegate
@@ -34,6 +56,25 @@ namespace Tensorflow
                 _ = values.shape.merge_with(t_max.shape);
 
                 return t_max;
+            });
+        }
+
+        /// <summary>
+        /// Computes the global norm of multiple tensors.
+        /// </summary>
+        /// <param name="t_list"></param>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public static Tensor global_norm(Tensor[] t_list, string name = null)
+        {
+            return tf_with(ops.name_scope(name, "global_norm", t_list), delegate
+            {
+                var half_squared_norms = t_list.Select(v => nn_ops.l2_loss(v)).ToArray();
+                var half_squared_norm = math_ops.reduce_sum(array_ops.stack(half_squared_norms));
+                var norm = math_ops.sqrt(half_squared_norm * 
+                    constant_op.constant(2.0, dtype: half_squared_norm.dtype),
+                    name: "global_norm");
+                return norm;
             });
         }
     }

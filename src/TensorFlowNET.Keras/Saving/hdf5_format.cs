@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.Text;
 using HDF.PInvoke;
 using Tensorflow.NumPy;
-using Tensorflow.Keras.Engine;
 using HDF5CSharp;
 using static Tensorflow.Binding;
 using static Tensorflow.KerasApi;
 using System.Linq;
-using Tensorflow.Util;
 namespace Tensorflow.Keras.Saving
 {
     public class hdf5_format
@@ -82,7 +80,7 @@ namespace Tensorflow.Keras.Saving
 
         }
 
-        public static List<(IVariableV1, NDArray)> load_weights_from_hdf5_group(long f, List<ILayer> layers)
+        public static void load_weights_from_hdf5_group(long f, List<ILayer> layers)
         {
             string original_keras_version = "2.5.0";
             string original_backend = null;
@@ -158,7 +156,6 @@ namespace Tensorflow.Keras.Saving
             }
 
             keras.backend.batch_set_value(weight_value_tuples);
-            return weight_value_tuples;
         }
 
         public static void toarrayf4(long filepath = -1, Dictionary<string, object> custom_objects = null, bool compile = false)
@@ -182,7 +179,6 @@ namespace Tensorflow.Keras.Saving
             Hdf5.WriteAttribute(f, "backend", "tensorflow");
             Hdf5.WriteAttribute(f, "keras_version", "2.5.0");
 
-            long g = 0, crDataGroup=0;
             foreach (var layer in layers)
             {
                 var weights = _legacy_weights(layer);
@@ -194,39 +190,39 @@ namespace Tensorflow.Keras.Saving
                 foreach (var weight in weights)
                     weight_names.Add(weight.Name);
                 
-                g = Hdf5.CreateOrOpenGroup(f, Hdf5Utils.NormalizedName(layer.Name));
+                var g = Hdf5.CreateOrOpenGroup(f, Hdf5Utils.NormalizedName(layer.Name));
                 save_attributes_to_hdf5_group(g, "weight_names", weight_names.ToArray());
                 foreach (var (name, val) in zip(weight_names, weights))
                 {
                     var tensor = val.AsTensor();
                     if (name.IndexOf("/") > 1)
                     {
-                        crDataGroup = Hdf5.CreateOrOpenGroup(g, Hdf5Utils.NormalizedName(name.Split('/')[0]));
+                        var crDataGroup = Hdf5.CreateOrOpenGroup(g, Hdf5Utils.NormalizedName(name.Split('/')[0]));
                         WriteDataset(crDataGroup, name.Split('/')[1], tensor);
                         Hdf5.CloseGroup(crDataGroup);
                     }
                     else
                     {
-                        WriteDataset(crDataGroup, name, tensor);
+                        WriteDataset(g, name, tensor);
                     }
                 }
                 Hdf5.CloseGroup(g);
             }
         }
 
-        private static void save_attributes_to_hdf5_group(long f,string name ,Array data)
+        private static void save_attributes_to_hdf5_group(long f, string name, Array data)
         {
             int num_chunks = 1;
-           
+
             var chunked_data = Split(data, num_chunks);
-            int getSize= 0;
-           
-            string getType = data.Length>0?data.GetValue(0).GetType().Name.ToLower():"string";
+            int getSize = 0;
+
+            string getType = data.Length > 0 ? data.GetValue(0).GetType().Name.ToLower() : "string";
 
             switch (getType)
             {
                 case "single":
-                    getSize=sizeof(float);
+                    getSize = sizeof(float);
                     break;
                 case "double":
                     getSize = sizeof(double);
@@ -241,30 +237,25 @@ namespace Tensorflow.Keras.Saving
                     getSize = sizeof(long);
                     break;
                 default:
-                    getSize=-1;
+                    getSize = -1;
                     break;
             }
             int getCount = chunked_data.Count;
-       
-            if (getSize != -1) {
-                num_chunks = (int)Math.Ceiling((double)(getCount * getSize) / (double)HDF5_OBJECT_HEADER_LIMIT);
+
+            if (getSize != -1)
+            {
+                num_chunks = (int)Math.Ceiling((double)(getCount * getSize) / HDF5_OBJECT_HEADER_LIMIT);
                 if (num_chunks > 1) chunked_data = Split(data, num_chunks);
             }
-            
+
             if (num_chunks > 1)
             {
                 foreach (var (chunk_id, chunk_data) in enumerate(chunked_data))
-                {
-                    
                     WriteAttrs(f, getType, $"{name}{chunk_id}", chunk_data.ToArray());
-              
-                }
-
             }
-            else {
-        
-                WriteAttrs(f, getType,name, data);
-              
+            else
+            {
+                WriteAttrs(f, getType, name, data);
             }
         }
 

@@ -14,9 +14,9 @@
    limitations under the License.
 ******************************************************************************/
 
-using System.Collections.Generic;
 using Serilog;
 using Serilog.Core;
+using System.Threading;
 using Tensorflow.Contexts;
 using Tensorflow.Eager;
 using Tensorflow.Gradients;
@@ -39,11 +39,17 @@ namespace Tensorflow
         public TF_DataType chars = TF_DataType.TF_STRING;
         public TF_DataType @string = TF_DataType.TF_STRING;
 
-        public Status Status;
         public OpDefLibrary OpDefLib;
-        public Context Context;
-        public IEagerRunner Runner;
         public Logger Logger;
+
+        ThreadLocal<Status> _status = new ThreadLocal<Status>(() => new Status());
+        public Status Status => _status.Value;
+
+        ThreadLocal<Context> _context = new ThreadLocal<Context>(() => new Context());
+        public Context Context => _context.Value;
+
+        ThreadLocal<IEagerRunner> _runner = new ThreadLocal<IEagerRunner>(() => new EagerRunner());
+        public IEagerRunner Runner => _runner.Value;
 
         public tensorflow()
         {
@@ -52,12 +58,8 @@ namespace Tensorflow
                 .WriteTo.Console()
                 .CreateLogger();
 
-            Status = new Status();
-            Context = new Context();
             OpDefLib = new OpDefLibrary();
-            ConstructThreadingObjects();
             InitGradientEnvironment();
-            Runner = new EagerRunner();
         }
 
         public string VERSION => c_api.StringPiece(c_api.TF_Version());
@@ -94,9 +96,7 @@ namespace Tensorflow
             => ops.get_default_session();
 
         public Session Session()
-        {
-            return new Session().as_default();
-        }
+            => compat.v1.Session();
 
         public Session Session(Graph graph, ConfigProto config = null)
         {

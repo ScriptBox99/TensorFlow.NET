@@ -1,4 +1,5 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Tensorflow;
 using static Tensorflow.Binding;
 
 namespace TensorFlowNET.UnitTest.ManagedAPI
@@ -44,6 +45,37 @@ namespace TensorFlowNET.UnitTest.ManagedAPI
             var x_under_reg = tf.linalg.lstsq(A_under, b_under, l2_regularizer: 2.0f);
             Assert.AreEqual(x_under_reg.shape, (4, 1));
             AssetSequenceEqual(x_under_reg.ToArray<float>(), new float[] { -0.04763567f, -1.214508f, 0.62748903f, 1.299031f });*/
+        }
+
+        [TestMethod]
+        public void Einsum()
+        {
+            var m0 = tf.random.normal((2, 3));
+            var m1 = tf.random.normal((3, 5));
+            var e = tf.linalg.einsum("ij,jk->ik", (m0, m1));
+            Assert.AreEqual(e.shape, (2, 5));
+        }
+
+        [TestMethod]
+        public void GlobalNorm()
+        {
+            var t_list = new Tensors(tf.constant(new float[] { 1, 2, 3, 4 }), tf.constant(new float[] { 5, 6, 7, 8 }));
+            var norm = tf.linalg.global_norm(t_list);
+            Assert.AreEqual(norm.numpy(), 14.282857f);
+        }
+
+        [TestMethod]
+        public void Tensordot()
+        {
+            var a = tf.constant(new[] { 1, 2 });
+            var b = tf.constant(new[] { 2, 3 });
+            var c = tf.linalg.tensordot(a, b, 0);
+            Assert.AreEqual(c.shape, (2, 2));
+            AssetSequenceEqual(c.ToArray<int>(), new[] { 2, 3, 4, 6 });
+
+            c = tf.linalg.tensordot(a, b, new[] { 0, 0 });
+            Assert.AreEqual(c.shape.ndim, 0);
+            Assert.AreEqual(c.numpy(), 8);
         }
     }
 }

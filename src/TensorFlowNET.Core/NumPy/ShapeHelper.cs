@@ -88,6 +88,13 @@ namespace Tensorflow.NumPy
 
         public static bool Equals(Shape shape, object target)
         {
+            if (shape is null && target is null)
+                return true;
+            else if (shape is null && target is not null)
+                return false;
+            else if (shape is not null && target is null)
+                return false;
+
             switch (target)
             {
                 case Shape shape1:
@@ -100,6 +107,18 @@ namespace Tensorflow.NumPy
                     if (shape.ndim != shape2.Length)
                         return false;
                     return Enumerable.SequenceEqual(shape.dims, shape2);
+                case int[] shape3:
+                    if (shape.ndim != shape3.Length)
+                        return false;
+                      return Enumerable.SequenceEqual(shape.as_int_list(), shape3);
+                case List<long> shape4:
+                    if (shape.ndim != shape4.Count)
+                        return false;
+                    return Enumerable.SequenceEqual(shape.dims, shape4);
+                case List<int> shape5:
+                    if (shape.ndim != shape5.Count)
+                        return false;
+                    return Enumerable.SequenceEqual(shape.as_int_list(), shape5);
                 default:
                     return false;
             }

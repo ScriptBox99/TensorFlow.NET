@@ -99,27 +99,16 @@ namespace Tensorflow
             [DebuggerStepThrough]
             public void Dispose()
             {
-                if (tf.Context.executing_eagerly())
-                    tf.Context.ScopeName = old_scope_name;
-                else
-                    get_default_graph()._name_stack = old_scope_name;
+
             }
 
             [DebuggerStepThrough]
             public void __exit__()
             {
-            }
-
-            [DebuggerNonUserCode]
-            public void __init__()
-            {
-
-            }
-
-            [DebuggerNonUserCode]
-            public void __del__()
-            {
-
+                if (tf.Context.executing_eagerly())
+                    tf.Context.ScopeName = old_scope_name;
+                else
+                    get_default_graph()._name_stack = old_scope_name;
             }
 
             /// <summary>

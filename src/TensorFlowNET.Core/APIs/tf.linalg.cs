@@ -26,6 +26,9 @@ namespace Tensorflow
         {
             linalg_ops ops = new linalg_ops();
 
+            public Tensor einsum(string equation, Tensors inputs, string name = null)
+                => math_ops.einsum(equation, inputs, name: name);
+
             public Tensor eye(int num_rows,
                 int num_columns = -1,
                 Shape batch_shape = null,
@@ -48,9 +51,15 @@ namespace Tensorflow
             public Tensor inv(Tensor input, bool adjoint = false, string name = null)
                 => ops.matrix_inverse(input, adjoint: adjoint, name: name);
 
+            public Tensor global_norm(Tensor[] t_list, string name = null)
+                => clip_ops.global_norm(t_list, name: name);
+
             public Tensor lstsq(Tensor matrix, Tensor rhs,
                 NDArray l2_regularizer = null, bool fast = true, string name = null)
                 => ops.matrix_solve_ls(matrix, rhs, l2_regularizer: l2_regularizer, fast: fast, name: name);
+
+            public Tensor tensordot(Tensor x, Tensor y, NDArray axes, string name = null)
+                => math_ops.tensordot(x, y, axes, name: name);
         }
 
         public Tensor diag(Tensor diagonal, string name = null)

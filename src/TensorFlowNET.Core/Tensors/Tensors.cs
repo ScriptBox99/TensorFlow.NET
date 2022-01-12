@@ -21,21 +21,13 @@ namespace Tensorflow
         public Shape shape => items.First().shape;
         public int rank => items.First().rank;
         public Graph graph => items.First().graph;
-        public bool IsCreatedInGraphMode => items.First().IsCreatedInGraphMode;
         public bool IsList { get; set; }
         public int Length => items.Count();
 
         public Tensor this[int index]
         {
-            get
-            {
-                return items[index];
-            }
-
-            set
-            {
-                items[index] = value;
-            }
+            get => items[index];
+            set => items[index] = value;
         }
 
         public Tensor this[params string[] slices]

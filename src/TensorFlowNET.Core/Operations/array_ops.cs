@@ -80,27 +80,16 @@ namespace Tensorflow
                 return tf_with(ops.name_scope(name, "zeros", shape), scope =>
                 {
                     name = scope;
-                    var shape_tensor = constant_op._tensor_shape_tensor_conversion_function(shape);
-                    Tensor zeros = null;
-                    switch (dtype)
+                    // var shape_tensor = constant_op._tensor_shape_tensor_conversion_function(shape);
+                    Tensor zeros = dtype switch
                     {
-                        case TF_DataType.TF_DOUBLE:
-                            zeros = constant(0d);
-                            break;
-                        case TF_DataType.TF_FLOAT:
-                            zeros = constant(0f);
-                            break;
-                        case TF_DataType.TF_INT8:
-                            zeros = constant((sbyte)0);
-                            break;
-                        case TF_DataType.TF_UINT8:
-                            zeros = constant((byte)0);
-                            break;
-                        default:
-                            zeros = constant(0);
-                            break;
-                    }
-                    return fill(shape_tensor, zeros, name: name);
+                        TF_DataType.TF_DOUBLE => constant(0d),
+                        TF_DataType.TF_FLOAT => constant(0f),
+                        TF_DataType.TF_INT8 => constant((sbyte)0),
+                        TF_DataType.TF_UINT8 => constant((byte)0),
+                        _ => constant(0)
+                    };
+                    return fill(shape, zeros, name: name);
                 });
             }
             else
@@ -311,12 +300,8 @@ namespace Tensorflow
         /// <param name="value">A value to fill the returned `tf.Tensor`.</param>
         /// <param name="name">Optional string. The name of the output `tf.Tensor`.</param>
         /// <returns>A `tf.Tensor` with shape `dims` and the same dtype as `value`.</returns>
-        public static Tensor fill(Tensor dims, Tensor value, string name = null)
-        {
-            var result = gen_array_ops.fill(dims, value, name: name);
-            // tensor_util.maybe_set_static_shape(result, dims)
-            return result;
-        }
+        public static Tensor fill<T>(Shape dims, T value, string name = null)
+            => gen_array_ops.fill(dims, value, name: name);
 
         /// <summary>
         /// Returns the rank of a tensor.
@@ -425,25 +410,18 @@ namespace Tensorflow
                 dtype = dtype.as_base_dtype();
                 name = scope;
 
-                Tensor ones = null;
-                switch (dtype)
+                Tensor ones = dtype switch
                 {
-                    case TF_DataType.TF_DOUBLE:
-                        ones = constant(1.0d);
-                        break;
-                    case TF_DataType.TF_FLOAT:
-                        ones = constant(1.0f);
-                        break;
-                    default:
-                        ones = constant(1);
-                        break;
-                }
+                    TF_DataType.TF_DOUBLE => constant(1.0d),
+                    TF_DataType.TF_FLOAT => constant(1.0f),
+                    _ => constant(1)
+                };
 
                 if (shape.ndim == 0)
                     return ones;
 
-                var shape_tensor = constant_op._tensor_shape_tensor_conversion_function(shape);
-                return fill(shape_tensor, ones, name: name);
+                // var shape_tensor = constant_op._tensor_shape_tensor_conversion_function(shape);
+                return fill(shape, ones, name: name);
             });
 
         public static Tensor one_hot(Tensor indices, Tensor depth,
@@ -752,7 +730,7 @@ namespace Tensorflow
         /// <returns>A `Tensor`. Has the same type as `input`.
         /// Contains the same data as `input`, but has one or more dimensions of
         /// size 1 removed.</returns>
-        public static Tensor squeeze(Tensor input, int[] axis = null, string name = null, int[] squeeze_dims = null)
+        public static Tensor squeeze(Tensor input, int[] axis = null, string name = null)
             => gen_array_ops.squeeze(input, axis, name);
 
         public static Tensor identity(Tensor input, string name = null)
@@ -812,6 +790,26 @@ namespace Tensorflow
                     return output.Select(x => x * mult_fact).ToArray();
                 }
             });
+        }
+
+        public static Tensor moveaxis(NDArray array, Axis source, Axis destination)
+        {
+            List<int> perm = null;
+            source = source.axis.Select(x => x < 0 ? array.rank + x : x).ToArray();
+            destination = destination.axis.Select(x => x < 0 ? array.rank + x : x).ToArray();
+
+            if (array.shape.rank > -1)
+            {
+                perm = range(0, array.rank).Where(i => !source.axis.Contains(i)).ToList();
+                foreach (var (dest, src) in zip(destination.axis, source.axis).OrderBy(x => x.Item1))
+                {
+                    perm.Insert(dest, src);
+                }
+            }
+            else
+                throw new NotImplementedException("");
+
+            return array_ops.transpose(array, perm.ToArray());
         }
 
         /// <summary>

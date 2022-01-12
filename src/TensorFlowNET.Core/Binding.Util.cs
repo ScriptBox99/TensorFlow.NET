@@ -98,35 +98,23 @@ namespace Tensorflow
                 default:
                     return obj?.ToString() ?? "null";
             }
-
-            object[] toObjectArray(Array arr)
-            {
-                var len = arr.LongLength;
-                var ret = new object[len];
-                for (long i = 0; i < len; i++)
-                {
-                    ret[i] = arr.GetValue(i);
-                }
-
-                return ret;
-            }
         }
 
-        private static TextWriter writer = null;
+        private static TextWriter _writer = Console.Out;
 
         public static TextWriter tf_output_redirect { 
             set
             {
-                var originWriter = writer ?? Console.Out;
-                originWriter.Flush();
-                if (originWriter is StringWriter)
-                    (originWriter as StringWriter).GetStringBuilder().Clear();
-                writer = value;
+                if(_writer != null)
+                {
+                    _writer.Flush();
+                    if (_writer is StringWriter sw)
+                        sw.GetStringBuilder().Clear();
+                }
+
+                _writer = value;
             }
-            get
-            {
-                return writer ?? Console.Out;
-            }
+            get => _writer ?? Console.Out;
         }
 
         public static void print(object obj)
@@ -203,56 +191,21 @@ namespace Tensorflow
                 yield return values[i];
         }
 
-        public static T New<T>() where T : ITensorFlowObject, new()
-        {
-            var instance = new T();
-            instance.__init__();
-            return instance;
-        }
-
-        [DebuggerStepThrough]
-        public static void tf_with(ITensorFlowObject py, Action<ITensorFlowObject> action)
-        {
-            try
-            {
-                py.__enter__();
-                action(py);
-            }
-            finally
-            {
-                py.__exit__();
-                py.Dispose();
-            }
-        }
-
         [DebuggerStepThrough]
         public static void tf_with<T>(T py, Action<T> action) where T : ITensorFlowObject
         {
-            try
-            {
-                py.__enter__();
-                action(py);
-            }
-            finally
-            {
-                py.__exit__();
-                py.Dispose();
-            }
+            py.__enter__();
+            action(py);
+            py.__exit__();
         }
 
         [DebuggerStepThrough]
         public static TOut tf_with<TIn, TOut>(TIn py, Func<TIn, TOut> action) where TIn : ITensorFlowObject
         {
-            try
-            {
-                py.__enter__();
-                return action(py);
-            }
-            finally
-            {
-                py.__exit__();
-                py.Dispose();
-            }
+            py.__enter__();
+            var result = action(py);
+            py.__exit__();
+            return result;
         }
 
         public static float time()
@@ -514,13 +467,12 @@ namespace Tensorflow
         {
             if (data is NDArray nd)
                 return nd.shape;
-
             else if (data is Tensor tensor)
                 return tensor.shape;
-
             else if (data is Axis axis)
                 return axis.IsScalar ? Shape.Scalar : new Shape(axis.axis.Length);
-
+            else if (data is Shape shape)
+                return new Shape(shape.rank);
             else if (!data.GetType().IsArray)
                 return Shape.Scalar;
 

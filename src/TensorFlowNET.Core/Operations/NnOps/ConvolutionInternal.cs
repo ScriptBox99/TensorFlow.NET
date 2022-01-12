@@ -36,7 +36,7 @@ namespace Tensorflow.Operations
             name = args.Name;
         }
 
-        public Tensor Apply(Tensors input, IVariableV1 filters)
+        public Tensor Apply(Tensors input, Tensor filters)
         {
             var filters_rank = filters.shape.ndim;
             var inputs_rank = input.shape.ndim;
@@ -90,11 +90,12 @@ namespace Tensorflow.Operations
                     strides.Insert(0, 1);
                     dilations.Insert(0, 1);
 
-                    var expanded = tf.expand_dims(input, spatial_start_dim);
+                    input = array_ops.expand_dims(input, spatial_start_dim);
+                    filters = array_ops.expand_dims(filters, 0);
 
                     result = gen_nn_ops.conv2d(new Conv2dParams
                     {
-                        Input = expanded,
+                        Input = input,
                         Filter = filters,
                         Strides = strides.ToArray(),
                         Padding = padding,
@@ -102,7 +103,7 @@ namespace Tensorflow.Operations
                         Dilations = dilations.ToArray(),
                         Name = name
                     });
-                    result = tf.squeeze(result, squeeze_dims: spatial_start_dim);
+                    result = array_ops.squeeze(result, new[] { spatial_start_dim });
                 }
             });
 

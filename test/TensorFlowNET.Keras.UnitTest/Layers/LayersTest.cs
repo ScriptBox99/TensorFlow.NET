@@ -5,6 +5,7 @@ using Tensorflow;
 using Tensorflow.Keras;
 using static Tensorflow.Binding;
 using static Tensorflow.KerasApi;
+using System.Linq;
 
 namespace TensorFlowNET.Keras.UnitTest
 {
@@ -14,7 +15,24 @@ namespace TensorFlowNET.Keras.UnitTest
     [TestClass]
     public class LayersTest : EagerModeTestBase
     {
-        // [TestMethod]
+        [TestMethod]
+        public void AveragePooling2D()
+        {
+            var x = tf.constant(new float[,]
+            {
+                { 1, 2, 3 },
+                { 4, 5, 6 },
+                { 7, 8, 9 }
+            });
+            x = tf.reshape(x, (1, 3, 3, 1));
+            var avg_pool_2d = keras.layers.AveragePooling2D(pool_size: (2, 2),
+                strides: (1, 1), padding: "valid");
+            Tensor avg = avg_pool_2d.Apply(x);
+            Assert.AreEqual((1, 2, 2, 1), avg.shape);
+            Equal(new float[] { 3, 4, 6, 7 }, avg.ToArray<float>());
+        }
+
+        [TestMethod]
         public void InputLayer()
         {
             var model = keras.Sequential(new List<ILayer>
@@ -22,8 +40,10 @@ namespace TensorFlowNET.Keras.UnitTest
               keras.layers.InputLayer(input_shape: 4),
               keras.layers.Dense(8)
             });
-            model.compile(optimizer: keras.optimizers.RMSprop(0.001f));
-            model.fit(np.zeros((10, 4)), np.ones((10, 8)));
+            model.compile(optimizer: keras.optimizers.RMSprop(0.001f),
+                loss: keras.losses.MeanSquaredError(),
+                metrics: new[] { "accuracy" });
+            model.fit(np.zeros((10, 4), dtype: tf.float32), np.ones((10, 8), dtype: tf.float32));
         }
 
         [TestMethod]
@@ -81,37 +101,13 @@ namespace TensorFlowNET.Keras.UnitTest
         /// https://www.tensorflow.org/api_docs/python/tf/keras/layers/Embedding
         /// </summary>
         [TestMethod]
-        public void Embedding_Simple()
-        {
-            var emb = keras.layers.Embedding(256, 12, input_length: 4);
-            var input_array = np.arange(12).reshape((3, 4)).astype(np.float32);
-            var output = emb.Apply(input_array);
-            Assert.AreEqual(new Shape(3, 4, 12), output.shape);
-        }
-
-        /// <summary>
-        /// https://www.tensorflow.org/api_docs/python/tf/keras/layers/Embedding
-        /// </summary>
-        [TestMethod]
-        [Ignore]
         public void Embedding()
         {
             var model = keras.Sequential();
-            var layer = keras.layers.Embedding(7, 2, input_length: 4);
+            var layer = keras.layers.Embedding(1000, 64, input_length: 10);
             model.add(layer);
-            // the model will take as input an integer matrix of size (batch,
-            // input_length).
-            // the largest integer (i.e. word index) in the input should be no larger
-            // than 999 (vocabulary size).
-            // now model.output_shape == (None, 10, 64), where None is the batch
-            // dimension.
-            var input_array = np.array(new int[,]
-            {
-                { 1, 2, 3, 4 },
-                { 2, 3, 4, 5 },
-                { 3, 4, 5, 6 }
-            });
-            // model.compile("rmsprop", "mse");
+            var input_array = np.random.randint(1000, size: (32, 10));
+            model.compile("rmsprop", "mse", new[] { "accuracy" });
             var output_array = model.predict(input_array);
             Assert.AreEqual((32, 10, 64), output_array.shape);
         }
@@ -151,6 +147,16 @@ namespace TensorFlowNET.Keras.UnitTest
             var layer = keras.layers.preprocessing.Resizing(16, 16);
             var output = layer.Apply(inputs);
             Assert.AreEqual((10, 16, 16, 3), output.shape);
+        }
+
+        [TestMethod]
+        public void LayerNormalization()
+        {
+            var inputs = tf.constant(np.arange(10).reshape((5, 2)) * 10, dtype: tf.float32);
+            var layer = keras.layers.LayerNormalization(axis: 1);
+            Tensor output = layer.Apply(inputs);
+            Assert.AreEqual((5, 2), output.shape);
+            Assert.IsTrue(output[0].numpy().Equals(new[] { -0.99998f, 0.99998f }));
         }
     }
 }

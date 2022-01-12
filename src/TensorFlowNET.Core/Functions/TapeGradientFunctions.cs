@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Tensorflow.Eager;
 using Tensorflow.Graphs;
+using Tensorflow.NumPy;
 using static Tensorflow.Binding;
 using static Tensorflow.tensorflow;
 
@@ -47,7 +49,7 @@ namespace Tensorflow.Functions
         {
             var (backward_function, to_record) = _wrap_backward_function(_forward_graph, _backward, flat_outputs);
             tf.Runner.RecordGradient(_forward.Name, inference_args, new object[0], to_record,
-                getBackwardFunction: () => backward_function);
+                getBackwardFunction: backward_function);
         }
 
         /// <summary>
@@ -148,7 +150,7 @@ namespace Tensorflow.Functions
                 src_graph: _func_graph);
 
             var captures_from_forward = backwards_graph.external_captures
-                .Where(x => x.IsCreatedInGraphMode && x.graph == _func_graph)
+                .Where(x => x is not EagerTensor && x is not NDArray && x.graph == _func_graph)
                 .ToArray();
             foreach(var capture in captures_from_forward)
             {

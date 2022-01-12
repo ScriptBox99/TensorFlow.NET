@@ -126,9 +126,10 @@ namespace Tensorflow.Keras
             PER_GRAPH_LAYER_NAME_UIDS.Clear();
             _CURRENT_SCRATCH_GRAPH = null;
             _GRAPH = null;
-            
+
             ops.set_default_session(tf.Session(ops.get_default_graph()));
             tf.enable_eager_execution();
+            tf.Runner.ClearEagerOperationMap();
 
             GC.Collect();
             GC.WaitForPendingFinalizers();
@@ -263,7 +264,7 @@ namespace Tensorflow.Keras
             if (output.op != null && output.op.type == "Softmax")
             {
                 if (output.op.inputs.Length != 1) throw new ApplicationException();
-                var o = output = output.op.inputs[0];
+                var o = output.op.inputs[0];
                 return tf.nn.softmax_cross_entropy_with_logits_v2(labels: target, logits: o, axis: axis);
             }
 
@@ -271,7 +272,7 @@ namespace Tensorflow.Keras
             output = output / math_ops.reduce_sum(output, new Axis(axis), true);
             // Compute cross entropy from probabilities.
             var epsilon_ = constant_op.constant(epsilon(), output.dtype.as_base_dtype());
-            output = clip_ops.clip_by_value(output, epsilon_, 1.0 - epsilon_);
+            output = clip_ops.clip_by_value(output, epsilon_, 1.0f - epsilon_);
             return -math_ops.reduce_sum(target * math_ops.log(output), new Axis(axis));
         }
 
@@ -346,19 +347,21 @@ namespace Tensorflow.Keras
                      string data_format = null,
                      Shape dilation_rate = null)
         {
+            /*
             var force_transpose = false;
             if (data_format == "channels_first" && !dilation_rate.Equals(new[] { 1, 1 }))
                 force_transpose = true;
-            // x, tf_data_format = _preprocess_conv2d_input(x, data_format, force_transpose)
+            x, tf_data_format = _preprocess_conv2d_input(x, data_format, force_transpose)
+            */
             var tf_data_format = "NHWC";
             padding = padding.ToUpper();
             strides = new Shape(1, strides[0], strides[1], 1);
-            if (dilation_rate.Equals(new[] { 1, 1 }))
+            if (dilation_rate.Equals(new long[] { 1, 1 }))
                 x = nn_impl.conv2d_transpose(x, kernel, output_shape, strides,
                     padding: padding,
                     data_format: tf_data_format);
             else
-                throw new NotImplementedException("");
+                throw new NotImplementedException("dilation_rate other than [1,1] is not yet supported");
 
             return x;
         }
