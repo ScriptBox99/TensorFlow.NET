@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
+using Tensorflow.Contexts;
+using Tensorflow.Eager;
 using static Tensorflow.Binding;
 
 namespace Tensorflow.Operations
@@ -17182,16 +17185,46 @@ namespace Tensorflow.Operations
         ///    path in the input checkpoint_prefixes.  This is useful when those paths are non
         ///    user-facing temporary locations.
         /// </remarks>
-        public static Operation merge_v2checkpoints(Tensor checkpoint_prefixes, Tensor destination_prefix, bool? delete_old_dirs = null, string name = "MergeV2Checkpoints")
+        public static Operation merge_v2_checkpoints(Tensor[] checkpoint_prefixes, Tensor destination_prefix, bool delete_old_dirs = true, bool allow_missing_files = false, string name = "MergeV2Checkpoints")
         {
+            var ctx = tf.Context;
+            if (ctx.executing_eagerly())
+            {
+                var result = tf.Runner.TFE_FastPathExecute(new FastPathOpExecInfo("MergeV2Checkpoints", name,
+                        checkpoint_prefixes, destination_prefix, "delete_old_dirs", delete_old_dirs, "allow_missing_files", allow_missing_files));
+                result = null;
+                return null;
+                //try
+                //{
+                //    var result = tf.Runner.TFE_FastPathExecute(new FastPathOpExecInfo("MergeV2Checkpoints", name,
+                //        new object[] { checkpoint_prefixes, destination_prefix, "delete_old_dirs", delete_old_dirs, "allow_missing_files", allow_missing_files }));
+                //    result = null;
+                //    return null;
+                //}
+                //catch (System.Exception)
+                //{
+                //    return merge_v2_checkpoints_eager_fallback(checkpoint_prefixes, destination_prefix, delete_old_dirs: delete_old_dirs,
+                //        allow_missing_files: allow_missing_files, name: name, ctx: ctx);
+                //}
+            }
             var dict = new Dictionary<string, object>();
             dict["checkpoint_prefixes"] = checkpoint_prefixes;
             dict["destination_prefix"] = destination_prefix;
-            if (delete_old_dirs.HasValue)
-                dict["delete_old_dirs"] = delete_old_dirs.Value;
+            dict["delete_old_dirs"] = delete_old_dirs;
             var op = tf.OpDefLib._apply_op_helper("MergeV2Checkpoints", name: name, keywords: dict);
             return op;
         }
+
+        //public static Operation merge_v2_checkpoints_eager_fallback(Tensor[] checkpoint_prefixes, Tensor destination_prefix, bool delete_old_dirs, bool allow_missing_files, string name, Context ctx)
+        //{
+        //    checkpoint_prefixes = ops.convert_to_tensor(checkpoint_prefixes, TF_DataType.TF_STRING);
+        //    destination_prefix = ops.convert_to_tensor(destination_prefix, TF_DataType.TF_STRING);
+        //    var inputs_flat = new Tensor[] { checkpoint_prefixes, destination_prefix };
+        //    var attrs = new object[] { "delete_old_dirs", delete_old_dirs, "allow_missing_files", allow_missing_files };
+        //    var result = execute.quick_execute("MergeV2Checkpoints", 0, inputs_flat, attrs, ctx, name);
+        //    result = null;
+        //    return null;
+        //}
 
         /// <summary>
         ///    Transforms a spectrogram into a form that's useful for speech recognition.
@@ -24259,6 +24292,12 @@ namespace Tensorflow.Operations
         /// </remarks>
         public static Tensor regex_full_match(Tensor input, Tensor pattern, string name = "RegexFullMatch")
         {
+            var ctx = tf.Context;
+            if (ctx.executing_eagerly())
+            {
+                var result = tf.Runner.TFE_FastPathExecute(new FastPathOpExecInfo("RegexFullMatch", name, input, pattern));
+                return result[0];
+            }
             var dict = new Dictionary<string, object>();
             dict["input"] = input;
             dict["pattern"] = pattern;
@@ -27150,8 +27189,33 @@ namespace Tensorflow.Operations
         ///    
         ///    Callers must ensure all the named tensors are indeed stored in the checkpoint.
         /// </remarks>
-        public static Tensor[] restore_v2(Tensor prefix, Tensor tensor_names, Tensor shape_and_slices, TF_DataType[] dtypes, string name = "RestoreV2")
+        public static Tensor[] restore_v2(Tensor prefix, string[] tensor_names, string[] shape_and_slices, TF_DataType[] dtypes, string name = "RestoreV2")
         {
+            var ctx = tf.Context;
+            if (ctx.executing_eagerly())
+            {
+                try
+                {
+                    Dictionary<string, object> attrs = new();
+                    attrs["dtypes"] = dtypes;
+                    var result = tf.Runner.TFE_FastPathExecute(new FastPathOpExecInfo(
+                            "RestoreV2", name, prefix, tensor_names, shape_and_slices
+                        )
+                    { attrs = attrs });
+                    return result;
+                }
+                catch (Exception)
+                {
+                    try
+                    {
+                        return restore_v2_eager_fallback(prefix, tensor_names, shape_and_slices, dtypes, name, ctx);
+                    }
+                    catch (Exception)
+                    {
+
+                    }
+                }
+            }
             var dict = new Dictionary<string, object>();
             dict["prefix"] = prefix;
             dict["tensor_names"] = tensor_names;
@@ -27161,6 +27225,22 @@ namespace Tensorflow.Operations
             int _idx = 0;
             var tensors = Enumerable.Range(0, op.OutputListLength("tensors")).Select(_ => op.outputs[_idx++]).ToArray();
             return (tensors);
+        }
+
+        public static Tensor[] restore_v2_eager_fallback(Tensor prefix, string[] tensor_names, string[] shape_and_slices, TF_DataType[] dtypes, string name, Context ctx)
+        {
+            prefix = ops.convert_to_tensor(prefix, TF_DataType.TF_STRING);
+            var tensor_names_tensor = ops.convert_to_tensor(tensor_names, TF_DataType.TF_STRING);
+            var shape_and_slices_tensor = ops.convert_to_tensor(shape_and_slices, TF_DataType.TF_STRING);
+            object[] attrs = new object[] { "dtypes", dtypes };
+            Tensor[] inputs_flat = new Tensor[] { prefix, tensor_names_tensor, shape_and_slices_tensor };
+            var result = execute.quick_execute("RestoreV2", dtypes.Length, inputs_flat, attrs, ctx, name);
+
+            if (execute.must_record_gradient())
+            {
+                // TODO(Rinne); record the gradient
+            }
+            return result;
         }
 
         /// <summary>
@@ -29744,6 +29824,12 @@ namespace Tensorflow.Operations
         /// </remarks>
         public static Tensor sharded_filename(Tensor basename, Tensor shard, Tensor num_shards, string name = "ShardedFilename")
         {
+            var ctx = tf.Context;
+            if (ctx.executing_eagerly())
+            {
+                var result = tf.Runner.TFE_FastPathExecute(new FastPathOpExecInfo("ShardedFilename", name, basename, shard, num_shards));
+                return result[0];
+            }
             var dict = new Dictionary<string, object>();
             dict["basename"] = basename;
             dict["shard"] = shard;
@@ -34668,6 +34754,12 @@ namespace Tensorflow.Operations
         /// </remarks>
         public static Tensor string_join(Tensor[] inputs, string separator = null, string name = "StringJoin")
         {
+            var ctx = tf.Context;
+            if (ctx.executing_eagerly())
+            {
+                var result = tf.Runner.TFE_FastPathExecute(new FastPathOpExecInfo("StringJoin", name, inputs, "separator", separator));
+                return result[0];
+            }
             var dict = new Dictionary<string, object>();
             dict["inputs"] = inputs;
             if (separator != null)

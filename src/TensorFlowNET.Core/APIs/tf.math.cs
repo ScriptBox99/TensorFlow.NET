@@ -14,6 +14,8 @@
    limitations under the License.
 ******************************************************************************/
 
+using Tensorflow.Operations;
+
 namespace Tensorflow
 {
     public partial class tensorflow
@@ -24,6 +26,8 @@ namespace Tensorflow
             public Tensor argmax(Tensor input, Axis axis = null, string name = null, int? dimension = null, TF_DataType output_type = TF_DataType.TF_INT64)
                 => gen_math_ops.arg_max(input, axis, name: name, output_type: output_type);
 
+            public Tensor count_nonzero(Tensor input, Axis? axis = null, bool? keepdims = null, TF_DataType dtype = TF_DataType.TF_INT64, string name = null)
+                => math_ops.count_nonzero_v2(input, axis: axis, keepdims: keepdims ?? false, dtype: dtype);
             public Tensor log(Tensor x, string name = null)
                 => gen_math_ops.log(x, name);
 
@@ -36,8 +40,37 @@ namespace Tensorflow
             public Tensor erf(Tensor x, string name = null)
                 => math_ops.erf(x, name);
 
+            public Tensor multiply(Tensor x, Tensor y, string name = null)
+                => math_ops.multiply(x, y, name: name);
+
+            public Tensor divide_no_nan(Tensor a, Tensor b, string name = null)
+                => math_ops.div_no_nan(a, b);
+
+            public Tensor square(Tensor x, string name = null)
+                => math_ops.square(x, name: name);
+
             public Tensor sum(Tensor x, Axis? axis = null, string name = null)
                 => math_ops.reduce_sum(x, axis: axis, name: name);
+
+            public Tensor softplus(Tensor features, string name = null)
+                => nn_ops.softplus(features, name: name);
+
+            public Tensor tanh(Tensor x, string name = null)
+                => math_ops.tanh(x, name: name);
+            
+            /// <summary>
+            /// Finds values and indices of the `k` largest entries for the last dimension.
+            /// </summary>
+            /// <param name="input"></param>
+            /// <param name="k"></param>
+            /// <param name="sorted"></param>
+            /// <param name="name"></param>
+            /// <returns></returns>
+            public Tensors top_k(Tensor input, int k, bool sorted = true, string name = null)
+                => nn_ops.top_kv2(input, k, sorted: sorted, name: name);
+
+            public Tensor in_top_k(Tensor predictions, Tensor targets, int k, string name = "InTopK")
+                => nn_ops.in_top_k(predictions, targets, k, name);
 
             /// <summary>
             /// 

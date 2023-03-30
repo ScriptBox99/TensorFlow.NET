@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
 
     <IsPackable>false</IsPackable>
 
@@ -11,7 +11,7 @@
 
     <AssemblyOriginatorKeyFile>Open.snk</AssemblyOriginatorKeyFile>
 
-    <LangVersion>9.0</LangVersion>
+    <LangVersion>11.0</LangVersion>
 
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
@@ -47,11 +47,11 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="5.10.3" />
-    <PackageReference Include="MethodBoundaryAspect.Fody" Version="2.0.144" />
+    <PackageReference Include="MethodBoundaryAspect.Fody" Version="2.0.148" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="2.2.8" />
     <PackageReference Include="MSTest.TestFramework" Version="2.2.8" />
-    <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.7.0" />
+    <PackageReference Include="SciSharp.TensorFlow.Redist" Version="2.11.0" />
   </ItemGroup>
 
   <ItemGroup>

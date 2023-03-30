@@ -1,10 +1,7 @@
-﻿using System.Collections.Generic;
-using Tensorflow.Keras.ArgsDefinition;
-using Tensorflow.Keras.Engine.DataAdapters;
+﻿using Tensorflow.Keras.ArgsDefinition;
 using Tensorflow.Keras.Losses;
-using Tensorflow.Keras.Optimizers;
-using static Tensorflow.Binding;
-using static Tensorflow.KerasApi;
+using Tensorflow.Keras.Saving.SavedModel;
+using Tensorflow.Train;
 
 namespace Tensorflow.Keras.Engine
 {
@@ -22,7 +19,7 @@ namespace Tensorflow.Keras.Engine
 #pragma warning restore CS0414 // The field 'Model._is_compiled' is assigned but its value is never used
 #pragma warning restore CS0108 // Member hides inherited member; missing new keyword
         ILossFunc loss;
-        OptimizerV2 optimizer;
+        IOptimizer optimizer;
         IVariableV1 _steps_per_execution;
         protected bool _is_graph_network;
         protected Tensors inputs;
@@ -33,12 +30,31 @@ namespace Tensorflow.Keras.Engine
         IVariableV1 _predict_counter;
         bool _base_model_initialized;
         bool stop_training;
-        DataHandler data_handler;
+
+        public bool IsGraphNetwork => _is_graph_network;
+        
+        public IOptimizer Optimizer
+        {
+            get => optimizer;
+            set => optimizer = value;
+        }
+
+        public bool Stop_training
+        {
+            get => stop_training;
+            set => stop_training = value;
+        }
 
         public Model(ModelArgs args)
             : base(args)
         {
             _init_batch_counters();
+        }
+
+        internal override void Initialize(LayerArgs args)
+        {
+            _init_batch_counters();
+            base.Initialize(args);
         }
 
         void _configure_steps_per_execution(int steps_per_execution)
@@ -70,18 +86,70 @@ namespace Tensorflow.Keras.Engine
                 aggregation: VariableAggregation.OnlyFirstReplica);
         }
 
-        public override List<IVariableV1> trainable_variables
+        public override List<ILayer> Layers
+            => _flatten_layers(recursive: false, include_self: false).ToList();
+
+        public override List<IVariableV1> TrainableWeights
         {
             get
             {
+                // skip the assertion of weights created.
                 var variables = new List<IVariableV1>();
-                foreach (var layer in _layers)
+
+                if (!Trainable)
                 {
-                    if (layer.Trainable)
-                        variables.AddRange(layer.trainable_variables);
+                    return variables;
                 }
-                return variables;
+
+                foreach (var trackable_obj in _self_tracked_trackables)
+                {
+                    if (trackable_obj.Trainable)
+                        variables.AddRange(trackable_obj.TrainableWeights);
+                }
+
+                variables.AddRange(_trainable_weights);
+
+                return variables.Distinct().ToList();
             }
         }
+
+        public override List<IVariableV1> NonTrainableWeights
+        {
+            get
+            {
+                // skip the assertion of weights created.
+                var variables = new List<IVariableV1>();
+
+                foreach (var trackable_obj in _self_tracked_trackables)
+                {
+                    variables.AddRange(trackable_obj.NonTrainableWeights);
+                }
+
+                if (!Trainable)
+                {
+                    var trainable_variables = new List<IVariableV1>();
+                    foreach (var trackable_obj in _self_tracked_trackables)
+                    {
+                        variables.AddRange(trackable_obj.TrainableWeights);
+                    }
+                    variables.AddRange(trainable_variables);
+                    variables.AddRange(_trainable_weights);
+                    variables.AddRange(_non_trainable_weights);
+                }
+
+                return variables.Distinct().ToList();
+            }
+        }
+
+        public override IDictionary<string, Trackable> _trackable_children(SaveType save_type = SaveType.CHECKPOINT, IDictionary<string, IDictionary<Trackable, ISerializedAttributes>>? cache = null)
+        {
+            if(save_type == SaveType.SAVEDMODEL)
+            {
+                //TODO: deal with `train_function`, `test_function`, `predict_function`, `train_tf_function`.
+            }
+            var children = base._trackable_children(save_type, cache);
+            return children;
+        }
+
     }
 }

@@ -13,7 +13,7 @@ namespace Tensorflow
         IDatasetV2 _dataset;
         TensorSpec[] _element_spec;
         dataset_ops ops = new dataset_ops();
-        Tensor _deleter;
+        //Tensor _deleter;
         Tensor _iterator_resource;
 
         public OwnedIterator(IDatasetV2 dataset)
@@ -26,8 +26,8 @@ namespace Tensorflow
             dataset = dataset.apply_options();
             _dataset = dataset;
             _element_spec = dataset.element_spec;
-            // _flat_output_types = 
-            (_iterator_resource, _deleter) = ops.anonymous_iterator_v2(_dataset.output_types, _dataset.output_shapes);
+            _iterator_resource = ops.anonymous_iterator_v3(_dataset.output_types, _dataset.output_shapes);
+            // TODO(Rinne): deal with graph mode.
             ops.make_iterator(dataset.variant_tensor, _iterator_resource);
         }
 
@@ -48,7 +48,7 @@ namespace Tensorflow
 
         public void Dispose()
         {
-            tf.Runner.Execute(tf.Context, "DeleteIterator", 0, new[] { _iterator_resource, _deleter }, null);
+            //tf.Runner.Execute(tf.Context, "DeleteIterator", 0, new[] { _iterator_resource, _deleter }, null);
         }
     }
 }

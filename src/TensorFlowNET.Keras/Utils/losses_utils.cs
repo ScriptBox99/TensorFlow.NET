@@ -15,6 +15,7 @@
 ******************************************************************************/
 
 using System;
+using System.Xml.Linq;
 using Tensorflow.Keras.Losses;
 using static Tensorflow.Binding;
 
@@ -24,32 +25,66 @@ namespace Tensorflow.Keras.Utils
     {
         public static Tensor compute_weighted_loss(Tensor losses, Tensor sample_weight = null, string reduction = null, string name = null)
         {
+            return tf_with(ops.name_scope("weighted_loss"), scope =>
+            {
+                if (sample_weight == null)
+                    sample_weight = losses.dtype == TF_DataType.TF_DOUBLE ? tf.constant(1.0) : tf.constant(1.0f);
+                var weighted_losses = math_ops.multiply(losses, sample_weight);
+                // Apply reduction function to the individual weighted losses.
+                var loss = reduce_weighted_loss(weighted_losses, reduction);
+                // Convert the result back to the input type.
+                // loss = math_ops.cast(loss, losses.dtype);
+                return loss;
+            });
+        }
+
+        public static (Tensor, Tensor, Tensor) squeeze_or_expand_dimensions(Tensor y_pred, Tensor y_true = null, Tensor sample_weight = null)
+        {
+            var y_pred_shape = y_pred.shape;
+            var y_pred_rank = y_pred_shape.ndim;
+            if (y_true != null)
+            {
+                var y_true_shape = y_true.shape;
+                var y_true_rank = y_true_shape.ndim;
+                if (y_true_rank > -1 && y_pred_rank > -1)
+                {
+                    if (y_pred_rank - y_true_rank != 1 || y_pred_shape[-1] == 1)
+                    {
+                        (y_true, y_pred) = remove_squeezable_dimensions(y_true, y_pred);
+                    }
+                }
+            }
+
             if (sample_weight == null)
-                sample_weight = losses.dtype == TF_DataType.TF_DOUBLE ? tf.constant(1.0) : tf.constant(1.0f);
-            var weighted_losses = scale_losses_by_sample_weight(losses, sample_weight);
-            // Apply reduction function to the individual weighted losses.
-            var loss = reduce_weighted_loss(weighted_losses, reduction);
-            // Convert the result back to the input type.
-            // loss = math_ops.cast(loss, losses.dtype);
-            return loss;
-        }
+            {
+                return (y_pred, y_true, sample_weight);
+            }
 
-        public static Tensor scale_losses_by_sample_weight(Tensor losses, Tensor sample_weight)
-        {
-            // losses = math_ops.cast(losses, dtypes.float32);
-            // sample_weight = math_ops.cast(sample_weight, dtypes.float32);
-            // Update dimensions of `sample_weight` to match with `losses` if possible.
-            // (losses, sample_weight) = squeeze_or_expand_dimensions(losses, sample_weight);
-            return math_ops.multiply(losses, sample_weight);
-        }
-
-        public static (Tensor, Tensor) squeeze_or_expand_dimensions(Tensor y_pred, Tensor sample_weight)
-        {
             var weights_shape = sample_weight.shape;
             var weights_rank = weights_shape.ndim;
             if (weights_rank == 0)
-                return (y_pred, sample_weight);
+                return (y_pred, y_true, sample_weight);
+
+            if (y_pred_rank > -1 && weights_rank > -1)
+            {
+                if (weights_rank - y_pred_rank == 1)
+                {
+                    sample_weight = tf.squeeze(sample_weight, -1);
+                }
+                else if (y_pred_rank - weights_rank == 1)
+                {
+                    sample_weight = tf.expand_dims(sample_weight, -1);
+                }
+
+                return (y_pred, y_true, sample_weight);
+            }
+
             throw new NotImplementedException("");
+        }
+
+        public static (Tensor, Tensor) remove_squeezable_dimensions(Tensor labels, Tensor predictions, int expected_rank_diff = 0, string name = null)
+        {
+            return (labels, predictions);
         }
 
         public static Tensor reduce_weighted_loss(Tensor weighted_losses, string reduction)

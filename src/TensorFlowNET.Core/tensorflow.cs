@@ -16,10 +16,12 @@
 
 using Serilog;
 using Serilog.Core;
+using System.Reflection;
 using System.Threading;
 using Tensorflow.Contexts;
 using Tensorflow.Eager;
 using Tensorflow.Gradients;
+using Tensorflow.Keras;
 
 namespace Tensorflow
 {
@@ -50,6 +52,30 @@ namespace Tensorflow
 
         ThreadLocal<IEagerRunner> _runner = new ThreadLocal<IEagerRunner>(() => new EagerRunner());
         public IEagerRunner Runner => _runner.Value;
+
+        private IKerasApi _keras;
+        public IKerasApi keras 
+        { 
+            get
+            {
+                if (_keras != null)
+                {
+                    return _keras;
+                }
+
+                var k = Assembly.Load("Tensorflow.Keras");
+                var cls = k.GetTypes().FirstOrDefault(x => x.GetInterfaces().Contains(typeof(IKerasApi)));
+                if (cls != null)
+                {
+                    _keras = Activator.CreateInstance(cls) as IKerasApi;
+                    return _keras;
+                }
+                else
+                {
+                    throw new Exception("Can't find keras library.");
+                }
+            }
+        }
 
         public tensorflow()
         {

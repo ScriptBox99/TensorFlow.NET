@@ -1,8 +1,9 @@
 ﻿using Tensorflow.Keras.ArgsDefinition;
+using Tensorflow.Keras.Engine;
 
 namespace Tensorflow.Keras.Optimizers
 {
-    public class OptimizerApi
+    public class OptimizerApi: IOptimizerApi
     {
         /// <summary>
         /// Adam optimization is a stochastic gradient descent method that is based on
@@ -15,7 +16,7 @@ namespace Tensorflow.Keras.Optimizers
         /// <param name="amsgrad"></param>
         /// <param name="name"></param>
         /// <returns></returns>
-        public OptimizerV2 Adam(float learning_rate = 0.001f,
+        public IOptimizer Adam(float learning_rate = 0.001f,
                 float beta_1 = 0.9f,
                 float beta_2 = 0.999f,
                 float epsilon = 1e-7f,
@@ -38,7 +39,7 @@ namespace Tensorflow.Keras.Optimizers
         /// <param name="centered"></param>
         /// <param name="name"></param>
         /// <returns></returns>
-        public OptimizerV2 RMSprop(float learning_rate = 0.001f,
+        public IOptimizer RMSprop(float learning_rate = 0.001f,
                 float rho = 0.9f,
                 float momentum = 0.0f,
                 float epsilon = 1e-7f,
@@ -54,7 +55,7 @@ namespace Tensorflow.Keras.Optimizers
                 Name = name
             });
 
-        public SGD SGD(float learning_rate)
+        public IOptimizer SGD(float learning_rate)
             => new SGD(learning_rate);
     }
 }

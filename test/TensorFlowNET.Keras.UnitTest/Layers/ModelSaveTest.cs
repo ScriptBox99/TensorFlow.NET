@@ -1,6 +1,9 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Tensorflow.Keras.Engine;
+using System.Diagnostics;
 using static Tensorflow.KerasApi;
+using Tensorflow.Keras.Saving;
+using Tensorflow.Keras.Models;
 
 namespace TensorFlowNET.Keras.UnitTest
 {
@@ -15,11 +18,12 @@ namespace TensorFlowNET.Keras.UnitTest
         {
             var model = GetFunctionalModel();
             var config = model.get_config();
-            var new_model = keras.models.from_config(config);
+            Debug.Assert(config is ModelConfig);
+            var new_model = new ModelsApi().from_config(config as ModelConfig);
             Assert.AreEqual(model.Layers.Count, new_model.Layers.Count);
         }
 
-        Functional GetFunctionalModel()
+        IModel GetFunctionalModel()
         {
             // Create a simple model.
             var inputs = keras.Input(shape: 32);

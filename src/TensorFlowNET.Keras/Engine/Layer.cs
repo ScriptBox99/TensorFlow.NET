@@ -14,6 +14,7 @@
    limitations under the License.
 ******************************************************************************/
 
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -49,6 +50,8 @@ namespace Tensorflow.Keras.Engine
         public bool Built => built;
         public bool Trainable => args.Trainable;
         public TF_DataType DType => args.DType;
+        public bool AutoCast => args.Autocast;
+        public IRegularizer ActivityRegularizer => args.ActivityRegularizer;
 
         /// <summary>
         /// A stateful layer is a layer whose updates are run during inference too,
@@ -59,39 +62,126 @@ namespace Tensorflow.Keras.Engine
         /// Provides information about which inputs are compatible with the layer.
         /// </summary>
         protected InputSpec inputSpec;
+        public InputSpec InputSpec => inputSpec;
         bool dynamic = true;
         public bool SupportsMasking { get; set; }
-        protected List<IVariableV1> trainable_weights;
+        protected List<IVariableV1> _trainable_weights;
 
-        public virtual List<IVariableV1> trainable_variables => trainable_weights;
+        public virtual List<IVariableV1> TrainableVariables => TrainableWeights;
 
-        protected List<IVariableV1> non_trainable_weights;
-        public List<IVariableV1> non_trainable_variables => non_trainable_weights;
+        protected List<IVariableV1> _non_trainable_weights;
+        public List<IVariableV1> NonTrainableVariables => NonTrainableWeights;
+        public List<IVariableV1> Variables => Weights;
+
+        public virtual List<IVariableV1> TrainableWeights
+        {
+            get
+            {
+                if (!this.Trainable)
+                {
+                    return new List<IVariableV1>();
+                }
+                var children_weights = _gather_children_variables(true);
+                return children_weights.Concat(_trainable_weights).Distinct().ToList();
+            }
+        }
+
+        public virtual List<IVariableV1> NonTrainableWeights
+        {
+            get
+            {
+                if (!this.Trainable)
+                {
+                    var children_weights = _gather_children_variables(true, true);
+                    return children_weights.Concat(_trainable_weights).Concat(_non_trainable_weights).Distinct().ToList();
+                }
+                else
+                {
+                    var children_weights = _gather_children_variables(include_non_trainable: true);
+                    return children_weights.Concat(_non_trainable_weights).Distinct().ToList();
+                }
+            }
+        }
+
+        public virtual List<IVariableV1> Weights
+        {
+            get
+            {
+                return TrainableWeights.Concat(NonTrainableWeights).ToList();
+            }
+            set
+            {
+                if (Weights.Count() != value.Count()) throw new ValueError(
+                                            $"You called `set_weights` on layer \"{this.name}\"" +
+                                            $"with a weight list of length {len(value)}, but the layer was " +
+                                            $"expecting {len(Weights)} weights.");
+                foreach (var (this_w, v_w) in zip(Weights, value))
+                    this_w.assign(v_w, read_value: true);
+            }
+        }
 
         protected int id;
         public int Id => id;
         protected string name;
         protected string base_name;
-        public string Name => name;
+        public string Name
+        {
+            get
+            {
+                return name;
+            }
+            set
+            {
+                name = value;
+            }
+        }
 
         protected bool computePreviousMask;
         protected List<Operation> updates;
         public Shape BatchInputShape => args.BatchInputShape;
+        protected TensorShapeConfig _buildInputShape = null;
+        public TensorShapeConfig BuildInputShape => _buildInputShape;
 
         List<INode> inboundNodes;
         public List<INode> InboundNodes => inboundNodes;
-
         List<INode> outboundNodes;
         public List<INode> OutboundNodes => outboundNodes;
 
+        public JObject SerializedAttributes { get; set; }
+
         ThreadLocal<CallContext> callContext = new ThreadLocal<CallContext>();
         public CallContext CallContext => callContext.Value;
-        public Tensor[] input => inboundNodes[0].input_tensors;
+        public Tensor[] input
+        {
+            get
+            {
+                if(inboundNodes is not null && inboundNodes.Count > 0)
+                {
+                    return inboundNodes[0].input_tensors;
+                }
+                return null;
+            }
+        }
         public Dictionary<int, List<INode>> NodesByDepth { get; set; }
-        public Shape output_shape => inboundNodes[0].Outputs.shape;
+        public Shape OutputShape
+        {
+            get
+            {
+                if(inboundNodes is not null && inboundNodes.Count > 0)
+                {
+                    return inboundNodes[0].Outputs.shape;
+                }
+                return null;
+            }
+        }
         protected List<ILayer> _self_tracked_trackables;
 
         public Layer(LayerArgs args)
+        {
+            Initialize(args);
+        }
+
+        internal virtual void Initialize(LayerArgs args)
         {
             this.args = args;
             // A stateful layer is a layer whose updates are run during inference too,
@@ -104,8 +194,8 @@ namespace Tensorflow.Keras.Engine
 
             id = ops.uid_layer();
             _init_set_name(args.Name);
-            trainable_weights = new List<IVariableV1>();
-            non_trainable_weights = new List<IVariableV1>();
+            _trainable_weights = new List<IVariableV1>();
+            _non_trainable_weights = new List<IVariableV1>();
             computePreviousMask = false;
             updates = new List<Operation>();
             _self_tracked_trackables = new List<ILayer>();
@@ -162,7 +252,7 @@ namespace Tensorflow.Keras.Engine
         /// </summary>
         /// <param name="inputs"></param>
         /// <param name="state"></param>
-        /// <param name="is_training"></param>
+        /// <param name="training"></param>
         /// <returns></returns>
         protected virtual Tensors Call(Tensors inputs, Tensor state = null, bool? training = null)
         {
@@ -191,7 +281,7 @@ namespace Tensorflow.Keras.Engine
                 tf.Context.eager_mode(isFunc: tf.Context.is_build_function());
             }
                
-            build(inputs);
+            build(inputs.shape);
 
             if (need_restore_mode)
                 tf.Context.restore_mode();
@@ -199,14 +289,15 @@ namespace Tensorflow.Keras.Engine
             built = true;
         }
 
-        protected virtual void build(Tensors inputs)
+        public virtual void build(Shape input_shape)
         {
+            _buildInputShape = input_shape;
             built = true;
         }
 
         protected virtual void add_loss(Func<Tensor> losses)
         {
-
+            
         }
 
         /// <summary>
@@ -217,10 +308,13 @@ namespace Tensorflow.Keras.Engine
         /// <param name="regularizer"></param>
         void _handle_weight_regularization(string name, IVariableV1 variable, IRegularizer regularizer)
         {
-            add_loss(() => regularizer.Apply(new RegularizerArgs
-            {
 
-            }));
+            add_loss(() => tf_with(ops.name_scope(name + "/Regularizer"), scope => 
+                regularizer.Apply(new RegularizerArgs(variable.AsTensor())
+                {
+
+                }) 
+            ));
         }
 
         /*protected virtual void add_update(Tensor[] updates, bool inputs = false)
@@ -244,37 +338,16 @@ namespace Tensorflow.Keras.Engine
         public int count_params()
         {
             if (Trainable)
-                return layer_utils.count_params(this, weights);
+                return layer_utils.count_params(this, Weights);
             return 0;
         }
-        List<IVariableV1> ILayer.trainable_weights
-        {
-            get
-            {
-                return trainable_weights;
-            }
-        }
 
-        List<IVariableV1> ILayer.non_trainable_weights
-        {
-            get
-            {
-                return non_trainable_weights;
-            }
-        }
-
-        public List<IVariableV1> weights
-        {
-            get
-            {
-                var weights = new List<IVariableV1>();
-                weights.AddRange(trainable_weights);
-                weights.AddRange(non_trainable_weights);
-                return weights;
-            }
-        }
-
-        public virtual LayerArgs get_config()
+        public virtual IKerasConfig get_config()
             => args;
+
+        public virtual void adapt(Tensor data, int? batch_size = null, int? steps = null)
+        {
+            
+        }
     }
 }

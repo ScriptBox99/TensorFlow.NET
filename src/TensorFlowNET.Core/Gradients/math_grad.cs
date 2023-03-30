@@ -529,7 +529,12 @@ namespace Tensorflow.Gradients
                     }
                     else if (!input_0_shape.Contains(-1) && !tf.Context.executing_eagerly())
                     {
-                        throw new NotImplementedException("");
+                        axes = axes.reshape(new Shape(-1));
+                        var shape_tensor = tf.constant(op.inputs[0].shape.as_int_list());
+                        var output_shape_kept_dims = math_ops.reduced_shape(shape_tensor, axes);
+                        var tile_scaling = _safe_shape_div(shape_tensor, output_shape_kept_dims);
+                        grad = array_ops.reshape(grad, output_shape_kept_dims);
+                        return new Tensor[] { array_ops.tile(grad, tile_scaling), null };
                     }
                 }
             }
@@ -631,6 +636,20 @@ namespace Tensorflow.Gradients
                 y = math_ops.conj(y);
                 var factor = constant_op.constant(0.5f, dtype: y.dtype);
                 return new Tensor[] { grad * (factor * math_ops.reciprocal(y)) };
+            });
+        }
+
+        [RegisterGradient("Rsqrt")]
+        public static Tensor[] _RsqrtGrad(Operation op, Tensor[] grads)
+        {
+            var grad = grads[0];
+            var y = op.outputs[0];
+
+            return tf_with(ops.control_dependencies(grads), delegate
+            {
+                y = math_ops.conj(y);
+                var factor = constant_op.constant(-0.5f, dtype: y.dtype);
+                return new Tensor[] { grad * (factor * math_ops.square(y) * y) };
             });
         }
 
@@ -821,7 +840,7 @@ namespace Tensorflow.Gradients
         /// <param name="x"></param>
         /// <param name="y"></param>
         /// <returns></returns>
-        private static (Tensor, Tensor, bool)[] SmartBroadcastGradientArgs(Tensor x, Tensor y, Tensor grad)
+        public static (Tensor, Tensor, bool)[] SmartBroadcastGradientArgs(Tensor x, Tensor y, Tensor grad)
         {
             Tensor sx, sy;
             if (x.shape.IsFullyDefined &&

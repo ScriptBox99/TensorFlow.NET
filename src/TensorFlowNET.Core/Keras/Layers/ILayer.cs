@@ -1,25 +1,28 @@
-﻿using System.Collections.Generic;
-using Tensorflow.Keras.ArgsDefinition;
-using Tensorflow.Keras.Engine;
+﻿using Tensorflow.Keras.Engine;
+using Tensorflow.Keras.Saving;
+using Tensorflow.Training;
 
 namespace Tensorflow.Keras
 {
-    public interface ILayer
+    public interface ILayer: IWithTrackable, IKerasConfigable
     {
         string Name { get; }
         bool Trainable { get; }
         bool Built { get; }
+        void build(Shape input_shape);
         List<ILayer> Layers { get; }
         List<INode> InboundNodes { get; }
         List<INode> OutboundNodes { get; }
-        Tensors Apply(Tensors inputs, Tensor state = null, bool is_training = false);
-        List<IVariableV1> trainable_variables { get; }
-        List<IVariableV1> trainable_weights { get; }
-        List<IVariableV1> non_trainable_weights { get; }
-        Shape output_shape { get; }
+        Tensors Apply(Tensors inputs, Tensor state = null, bool training = false);
+        List<IVariableV1> TrainableVariables { get; }
+        List<IVariableV1> TrainableWeights { get; }
+        List<IVariableV1> NonTrainableWeights { get; }
+        List<IVariableV1> Weights { get; }
+        Shape OutputShape { get; }
         Shape BatchInputShape { get; }
+        TensorShapeConfig BuildInputShape { get; }
         TF_DataType DType { get; }
         int count_params();
-        LayerArgs get_config();
+        void adapt(Tensor data, int? batch_size = null, int? steps = null);
     }
 }

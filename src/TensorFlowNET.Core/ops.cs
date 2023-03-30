@@ -247,7 +247,7 @@ namespace Tensorflow
             foreach (var attr in node_def.Attr)
             {
                 var bytes = attr.Value.ToByteArray();
-                c_api.TF_SetAttrValueProto(op_desc, attr.Key, bytes, proto_len: bytes.Length, status: status.Handle);
+                c_api.TF_SetAttrValueProto(op_desc, attr.Key, bytes, proto_len: bytes.Length, status: status);
                 status.Check(true);
             }
 
@@ -565,6 +565,24 @@ namespace Tensorflow
                 return true;
             else
                 throw new NotImplementedException("");
+        }
+
+        public static bool inside_function()
+        {
+            return get_default_graph().building_function;
+        }
+
+        public static void dismantle_graph(Graph graph)
+        {
+            
+        }
+
+        public class NullContextManager: IDisposable
+        {
+            public void Dispose()
+            {
+                
+            }
         }
     }
 }

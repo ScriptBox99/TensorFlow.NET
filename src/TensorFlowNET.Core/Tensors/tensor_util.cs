@@ -80,6 +80,14 @@ namespace Tensorflow
             {
                 return np.array(tensor.IntVal.ToArray()).reshape(shape);
             }
+            else if (new DataType[] { DataType.DtInt64 }.Contains(tensor.Dtype))
+            {
+                return np.array(tensor.Int64Val.ToArray()).reshape(shape);
+            }
+            else if (new DataType[] { DataType.DtUint64 }.Contains(tensor.Dtype))
+            {
+                return np.array(tensor.Uint64Val.ToArray()).reshape(shape);
+            }
             else if (tensor.Dtype == DataType.DtBool)
             {
                 return np.array(tensor.BoolVal.ToArray()).reshape(shape);
@@ -120,6 +128,11 @@ namespace Tensorflow
                 {
                     if (dtype == TF_DataType.TF_INT32)
                         values = long_values.Select(x => (int)Convert.ChangeType(x, new_system_dtype)).ToArray();
+                }
+                else if (values is double[] double_values)
+                {
+                    if (dtype == TF_DataType.TF_FLOAT)
+                        values = double_values.Select(x => (float)Convert.ChangeType(x, new_system_dtype)).ToArray();
                 }
                 else
                     values = Convert.ChangeType(values, new_system_dtype);

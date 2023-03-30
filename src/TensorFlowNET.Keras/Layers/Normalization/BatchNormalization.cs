@@ -53,13 +53,12 @@ namespace Tensorflow.Keras.Layers
             axis = args.Axis.dims.Select(x => (int)x).ToArray();
         }
 
-        protected override void build(Tensors inputs)
+        public override void build(Shape input_shape)
         {
-            Shape input_shape = inputs.shape;
             var ndims = input_shape.ndim;
             foreach (var (idx, x) in enumerate(axis))
                 if (x < 0)
-                    axis[idx] = ndims + x;
+                    args.Axis.dims[idx] = axis[idx] = ndims + x;
 
             fused = ndims == 4;
 
@@ -119,6 +118,7 @@ namespace Tensorflow.Keras.Layers
                 throw new NotImplementedException("build when renorm is true");
 
             built = true;
+            _buildInputShape = input_shape;
         }
 
         public override Shape ComputeOutputShape(Shape input_shape)

@@ -1,16 +1,19 @@
 ﻿using System;
-using Tensorflow.NumPy;
-using System.Collections.Generic;
+using Tensorflow.Framework.Models;
 using Tensorflow.Keras.ArgsDefinition;
+using Tensorflow.Keras.ArgsDefinition.Core;
+using Tensorflow.Keras.ArgsDefinition.Rnn;
 using Tensorflow.Keras.Engine;
+using Tensorflow.Keras.Layers.Rnn;
+using Tensorflow.NumPy;
 using static Tensorflow.Binding;
 using static Tensorflow.KerasApi;
 
 namespace Tensorflow.Keras.Layers
 {
-    public partial class LayersApi
+    public partial class LayersApi : ILayersApi
     {
-        public Preprocessing preprocessing { get; } = new Preprocessing();
+        public IPreprocessing preprocessing { get; } = new Preprocessing();
 
         /// <summary>
         /// Layer that normalizes its inputs.
@@ -38,7 +41,7 @@ namespace Tensorflow.Keras.Layers
         /// Note that momentum is still applied to get the means and variances for inference.
         /// </param>
         /// <returns>Tensor of the same shape as input.</returns>
-        public BatchNormalization BatchNormalization(int axis = -1,
+        public ILayer BatchNormalization(int axis = -1,
             float momentum = 0.99f,
             float epsilon = 0.001f,
             bool center = true,
@@ -84,7 +87,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="kernel_initializer">Initializer for the kernel weights matrix (see keras.initializers).</param>
         /// <param name="bias_initializer">Initializer for the bias vector (see keras.initializers).</param>
         /// <returns>A tensor of rank 3 representing activation(conv1d(inputs, kernel) + bias).</returns>
-        public Conv1D Conv1D(int filters,
+        public ILayer Conv1D(int filters,
             Shape kernel_size,
             int strides = 1,
             string padding = "valid",
@@ -106,7 +109,7 @@ namespace Tensorflow.Keras.Layers
                 DilationRate = dilation_rate,
                 Groups = groups,
                 UseBias = use_bias,
-                Activation = GetActivationByName(activation),
+                Activation = keras.activations.GetActivationFromName(activation),
                 KernelInitializer = GetInitializerByName(kernel_initializer),
                 BiasInitializer = GetInitializerByName(bias_initializer)
             });
@@ -131,7 +134,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="bias_regularizer">Regularizer function applied to the bias vector (see keras.regularizers).</param>
         /// <param name="activity_regularizer">Regularizer function applied to the output of the layer (its "activation") (see keras.regularizers).</param>
         /// <returns>A tensor of rank 4+ representing activation(conv2d(inputs, kernel) + bias).</returns>
-        public Conv2D Conv2D(int filters,
+        public ILayer Conv2D(int filters,
             Shape kernel_size = null,
             Shape strides = null,
             string padding = "valid",
@@ -161,7 +164,7 @@ namespace Tensorflow.Keras.Layers
                     BiasInitializer = bias_initializer == null ? tf.zeros_initializer : bias_initializer,
                     BiasRegularizer = bias_regularizer,
                     ActivityRegularizer = activity_regularizer,
-                    Activation = activation ?? keras.activations.Linear
+                    Activation = activation ?? keras.activations.Linear,
                 });
 
         /// <summary>
@@ -184,7 +187,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="bias_regularizer">The name of the regularizer function applied to the bias vector (see keras.regularizers).</param>
         /// <param name="activity_regularizer">The name of the regularizer function applied to the output of the layer (its "activation") (see keras.regularizers).</param>
         /// <returns>A tensor of rank 4+ representing activation(conv2d(inputs, kernel) + bias).</returns>
-        public Conv2D Conv2D(int filters,
+        public ILayer Conv2D(int filters,
             Shape kernel_size = null,
             Shape strides = null,
             string padding = "valid",
@@ -208,7 +211,7 @@ namespace Tensorflow.Keras.Layers
                     UseBias = use_bias,
                     KernelInitializer = GetInitializerByName(kernel_initializer),
                     BiasInitializer = GetInitializerByName(bias_initializer),
-                    Activation = GetActivationByName(activation)
+                    Activation = keras.activations.GetActivationFromName(activation)
                 });
 
         /// <summary>
@@ -228,7 +231,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="bias_regularizer">The name of the regularizer function applied to the bias vector (see keras.regularizers).</param>
         /// <param name="activity_regularizer">The name of the regularizer function applied to the output of the layer (its "activation") (see keras.regularizers).</param>
         /// <returns>A tensor of rank 4+ representing activation(conv2d(inputs, kernel) + bias).</returns>
-        public Conv2DTranspose Conv2DTranspose(int filters,
+        public ILayer Conv2DTranspose(int filters,
             Shape kernel_size = null,
             Shape strides = null,
             string output_padding = "valid",
@@ -253,7 +256,7 @@ namespace Tensorflow.Keras.Layers
                     UseBias = use_bias,
                     KernelInitializer = GetInitializerByName(kernel_initializer),
                     BiasInitializer = GetInitializerByName(bias_initializer),
-                    Activation = GetActivationByName(activation)
+                    Activation = keras.activations.GetActivationFromName(activation)
                 });
 
         /// <summary>
@@ -270,7 +273,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="bias_initializer">Initializer for the bias vector.</param>
         /// <param name="input_shape">N-D tensor with shape: (batch_size, ..., input_dim). The most common situation would be a 2D input with shape (batch_size, input_dim).</param>
         /// <returns>N-D tensor with shape: (batch_size, ..., units). For instance, for a 2D input with shape (batch_size, input_dim), the output would have shape (batch_size, units).</returns>
-        public Dense Dense(int units,
+        public ILayer Dense(int units,
             Activation activation = null,
             IInitializer kernel_initializer = null,
             bool use_bias = true,
@@ -294,11 +297,11 @@ namespace Tensorflow.Keras.Layers
         /// </summary>
         /// <param name="units">Positive integer, dimensionality of the output space.</param>
         /// <returns>N-D tensor with shape: (batch_size, ..., units). For instance, for a 2D input with shape (batch_size, input_dim), the output would have shape (batch_size, units).</returns>
-        public Dense Dense(int units)
+        public ILayer Dense(int units)
             => new Dense(new DenseArgs
             {
                 Units = units,
-                Activation = GetActivationByName("linear")
+                Activation = keras.activations.GetActivationFromName("linear")
             });
 
         /// <summary>
@@ -312,13 +315,13 @@ namespace Tensorflow.Keras.Layers
         /// <param name="activation">Activation function to use. If you don't specify anything, no activation is applied (ie. "linear" activation: a(x) = x).</param>
         /// <param name="input_shape">N-D tensor with shape: (batch_size, ..., input_dim). The most common situation would be a 2D input with shape (batch_size, input_dim).</param>
         /// <returns>N-D tensor with shape: (batch_size, ..., units). For instance, for a 2D input with shape (batch_size, input_dim), the output would have shape (batch_size, units).</returns>
-        public Dense Dense(int units,
+        public ILayer Dense(int units,
             string activation = null,
             Shape input_shape = null)
             => new Dense(new DenseArgs
             {
                 Units = units,
-                Activation = GetActivationByName(activation),
+                Activation = keras.activations.GetActivationFromName(activation),
                 InputShape = input_shape
             });
 
@@ -363,6 +366,33 @@ namespace Tensorflow.Keras.Layers
             return layer.Apply(inputs);
         }
 
+
+        public ILayer EinsumDense(string equation,
+                Shape output_shape,
+                string bias_axes,
+                Activation activation = null,
+                IInitializer kernel_initializer= null,
+                IInitializer bias_initializer= null,
+                IRegularizer kernel_regularizer= null,
+                IRegularizer bias_regularizer= null,
+                IRegularizer activity_regularizer= null,
+                Action kernel_constraint= null,
+                Action bias_constraint= null) =>
+            new EinsumDense(new EinsumDenseArgs()
+            {
+                Equation = equation,
+                OutputShape = output_shape,
+                BiasAxes = bias_axes,
+                Activation = activation,
+                KernelInitializer = kernel_initializer ?? tf.glorot_uniform_initializer,
+                BiasInitializer = bias_initializer ?? tf.zeros_initializer,
+                KernelRegularizer = kernel_regularizer,
+                BiasRegularizer = bias_regularizer,
+                ActivityRegularizer = activity_regularizer,
+                KernelConstraint = kernel_constraint,
+                BiasConstraint = bias_constraint
+            });
+
         /// <summary>
         /// Applies Dropout to the input.
         /// The Dropout layer randomly sets input units to 0 with a frequency of rate at each step during training time, 
@@ -375,7 +405,7 @@ namespace Tensorflow.Keras.Layers
         /// </param>
         /// <param name="seed">An integer to use as random seed.</param>
         /// <returns></returns>
-        public Dropout Dropout(float rate, Shape noise_shape = null, int? seed = null)
+        public ILayer Dropout(float rate, Shape noise_shape = null, int? seed = null)
             => new Dropout(new DropoutArgs
             {
                 Rate = rate,
@@ -394,7 +424,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="embeddings_initializer">Initializer for the embeddings matrix (see keras.initializers).</param>
         /// <param name="mask_zero"></param>
         /// <returns></returns>
-        public Embedding Embedding(int input_dim,
+        public ILayer Embedding(int input_dim,
             int output_dim,
             IInitializer embeddings_initializer = null,
             bool mask_zero = false,
@@ -419,7 +449,7 @@ namespace Tensorflow.Keras.Layers
         /// If you never set it, then it will be "channels_last".
         /// </param>
         /// <returns></returns>
-        public Flatten Flatten(string data_format = null)
+        public ILayer Flatten(string data_format = null)
             => new Flatten(new FlattenArgs
             {
                 DataFormat = data_format
@@ -439,23 +469,61 @@ namespace Tensorflow.Keras.Layers
         /// In this case, values of 'None' in the 'shape' argument represent ragged dimensions. For more information about RaggedTensors, see this guide.
         /// </param>
         /// <returns>A tensor.</returns>
-        public Tensors Input(Shape shape,
+        public Tensors Input(Shape shape = null,
+            int batch_size = -1,
             string name = null,
+            TF_DataType dtype = TF_DataType.DtInvalid, 
             bool sparse = false,
-            bool ragged = false)
+            Tensor tensor = null, 
+            bool ragged = false, 
+            TypeSpec type_spec = null, 
+            Shape batch_input_shape = null, 
+            Shape batch_shape = null)
         {
-            var input_layer = new InputLayer(new InputLayerArgs
+            if(sparse && ragged)
             {
-                InputShape = shape,
+                throw new ValueError("Cannot set both `sparse` and `ragged` to `true` in a Keras `Input`.");
+            }
+
+            InputLayerArgs input_layer_config = new()
+            {
                 Name = name,
+                DType = dtype,
                 Sparse = sparse,
-                Ragged = ragged
-            });
+                Ragged = ragged,
+                InputTensor = tensor,
+                // skip the `type_spec`
+            };
+
+            if(shape is not null && batch_input_shape is not null)
+            {
+                throw new ValueError("Only provide the `shape` OR `batch_input_shape` argument "
+                                    + "to Input, not both at the same time.");
+            }
+
+            if(batch_input_shape is null && shape is null && tensor is null && type_spec is null)
+            {
+                throw new ValueError("Please provide to Input a `shape` or a `tensor` or a `type_spec` argument. Note that " +
+                    "`shape` does not include the batch dimension.");
+            }
+
+            if(batch_input_shape is not null)
+            {
+                shape = batch_input_shape["1:"];
+                input_layer_config.BatchInputShape = batch_input_shape;
+            }
+            else
+            {
+                input_layer_config.BatchSize = batch_size;
+                input_layer_config.InputShape = shape;
+            }
+
+            var input_layer = new InputLayer(input_layer_config);
 
             return input_layer.InboundNodes[0].Outputs;
         }
 
-        public InputLayer InputLayer(Shape input_shape,
+        public ILayer InputLayer(Shape input_shape,
             string name = null,
             bool sparse = false,
             bool ragged = false)
@@ -475,7 +543,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="padding"></param>
         /// <param name="data_format"></param>
         /// <returns></returns>
-        public AveragePooling2D AveragePooling2D(Shape pool_size = null,
+        public ILayer AveragePooling2D(Shape pool_size = null,
             Shape strides = null,
             string padding = "valid",
             string data_format = null)
@@ -500,7 +568,7 @@ namespace Tensorflow.Keras.Layers
         /// channels_last corresponds to inputs with shape (batch, steps, features) while channels_first corresponds to inputs with shape (batch, features, steps).
         /// </param>
         /// <returns></returns>
-        public MaxPooling1D MaxPooling1D(int? pool_size = null,
+        public ILayer MaxPooling1D(int? pool_size = null,
             int? strides = null,
             string padding = "valid",
             string data_format = null)
@@ -537,7 +605,7 @@ namespace Tensorflow.Keras.Layers
         /// It defaults to the image_data_format value found in your Keras config file at ~/.keras/keras.json. 
         /// If you never set it, then it will be "channels_last"</param>
         /// <returns></returns>
-        public MaxPooling2D MaxPooling2D(Shape pool_size = null,
+        public ILayer MaxPooling2D(Shape pool_size = null,
             Shape strides = null,
             string padding = "valid",
             string data_format = null)
@@ -591,7 +659,7 @@ namespace Tensorflow.Keras.Layers
             return layer.Apply(inputs);
         }
 
-        public Layer LayerNormalization(Axis? axis,
+        public ILayer LayerNormalization(Axis? axis,
                float epsilon = 1e-3f,
                bool center = true,
                bool scale = true,
@@ -611,32 +679,11 @@ namespace Tensorflow.Keras.Layers
         /// </summary>
         /// <param name="alpha">Negative slope coefficient.</param>
         /// <returns></returns>
-        public Layer LeakyReLU(float alpha = 0.3f)
+        public ILayer LeakyReLU(float alpha = 0.3f)
             => new LeakyReLu(new LeakyReLuArgs
             {
                 Alpha = alpha
             });
-
-        /// <summary>
-        /// Fully-connected RNN where the output is to be fed back to input.
-        /// </summary>
-        /// <param name="units">Positive integer, dimensionality of the output space.</param>
-        /// <returns></returns>
-        public Layer SimpleRNN(int units) => SimpleRNN(units, "tanh");
-
-        /// <summary>
-        /// Fully-connected RNN where the output is to be fed back to input.
-        /// </summary>
-        /// <param name="units">Positive integer, dimensionality of the output space.</param>
-        /// <param name="activation">Activation function to use. If you pass null, no activation is applied (ie. "linear" activation: a(x) = x).</param>
-        /// <returns></returns>
-        public Layer SimpleRNN(int units,
-            Activation activation = null)
-                => new SimpleRNN(new SimpleRNNArgs
-                {
-                    Units = units,
-                    Activation = activation
-                });
 
         /// <summary>
         /// 
@@ -644,12 +691,22 @@ namespace Tensorflow.Keras.Layers
         /// <param name="units">Positive integer, dimensionality of the output space.</param>
         /// <param name="activation">The name of the activation function to use. Default: hyperbolic tangent (tanh)..</param>
         /// <returns></returns>
-        public Layer SimpleRNN(int units,
-            string activation = "tanh")
+        public ILayer SimpleRNN(int units,
+            string activation = "tanh",
+            string kernel_initializer = "glorot_uniform",
+            string recurrent_initializer = "orthogonal",
+            string bias_initializer = "zeros",
+            bool return_sequences = false,
+            bool return_state = false)
                 => new SimpleRNN(new SimpleRNNArgs
                 {
                     Units = units,
-                    Activation = GetActivationByName(activation)
+                    Activation = keras.activations.GetActivationFromName(activation),
+                    KernelInitializer = GetInitializerByName(kernel_initializer),
+                    RecurrentInitializer = GetInitializerByName(recurrent_initializer),
+                    BiasInitializer = GetInitializerByName(bias_initializer),
+                    ReturnSequences = return_sequences,
+                    ReturnState = return_state
                 });
 
         /// <summary>
@@ -679,7 +736,7 @@ namespace Tensorflow.Keras.Layers
         /// although it tends to be more memory-intensive. Unrolling is only suitable for short sequences.
         /// </param>
         /// <returns></returns>
-        public Layer LSTM(int units,
+        public ILayer LSTM(int units,
             Activation activation = null,
             Activation recurrent_activation = null,
             bool use_bias = true,
@@ -722,7 +779,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="offset"></param>
         /// <param name="input_shape"></param>
         /// <returns></returns>
-        public Rescaling Rescaling(float scale,
+        public ILayer Rescaling(float scale,
             float offset = 0,
             Shape input_shape = null)
             => new Rescaling(new RescalingArgs
@@ -736,21 +793,21 @@ namespace Tensorflow.Keras.Layers
         /// 
         /// </summary>
         /// <returns></returns>
-        public Add Add()
+        public ILayer Add()
             => new Add(new MergeArgs { });
 
         /// <summary>
         /// 
         /// </summary>
         /// <returns></returns>
-        public Subtract Subtract()
+        public ILayer Subtract()
             => new Subtract(new MergeArgs { });
 
         /// <summary>
         /// Global max pooling operation for spatial data.
         /// </summary>
         /// <returns></returns>
-        public GlobalAveragePooling2D GlobalAveragePooling2D()
+        public ILayer GlobalAveragePooling2D()
             => new GlobalAveragePooling2D(new Pooling2DArgs { });
 
         /// <summary>
@@ -760,7 +817,7 @@ namespace Tensorflow.Keras.Layers
         /// channels_last corresponds to inputs with shape (batch, steps, features) while channels_first corresponds to inputs with shape (batch, features, steps).
         /// </param>
         /// <returns></returns>
-        public GlobalAveragePooling1D GlobalAveragePooling1D(string data_format = "channels_last")
+        public ILayer GlobalAveragePooling1D(string data_format = "channels_last")
             => new GlobalAveragePooling1D(new Pooling1DArgs { DataFormat = data_format });
 
         /// <summary>
@@ -769,7 +826,7 @@ namespace Tensorflow.Keras.Layers
         /// <param name="data_format">A string, one of channels_last (default) or channels_first. The ordering of the dimensions in the inputs. 
         /// channels_last corresponds to inputs with shape (batch, height, width, channels) while channels_first corresponds to inputs with shape (batch, channels, height, width).</param>
         /// <returns></returns>
-        public GlobalAveragePooling2D GlobalAveragePooling2D(string data_format = "channels_last")
+        public ILayer GlobalAveragePooling2D(string data_format = "channels_last")
             => new GlobalAveragePooling2D(new Pooling2DArgs { DataFormat = data_format });
 
         /// <summary>
@@ -780,7 +837,7 @@ namespace Tensorflow.Keras.Layers
         /// channels_last corresponds to inputs with shape (batch, steps, features) while channels_first corresponds to inputs with shape (batch, features, steps).
         /// </param>
         /// <returns></returns>
-        public GlobalMaxPooling1D GlobalMaxPooling1D(string data_format = "channels_last")
+        public ILayer GlobalMaxPooling1D(string data_format = "channels_last")
             => new GlobalMaxPooling1D(new Pooling1DArgs { DataFormat = data_format });
 
         /// <summary>
@@ -789,26 +846,8 @@ namespace Tensorflow.Keras.Layers
         /// <param name="data_format">A string, one of channels_last (default) or channels_first. The ordering of the dimensions in the inputs. 
         /// channels_last corresponds to inputs with shape (batch, height, width, channels) while channels_first corresponds to inputs with shape (batch, channels, height, width).</param>
         /// <returns></returns>
-        public GlobalMaxPooling2D GlobalMaxPooling2D(string data_format = "channels_last")
+        public ILayer GlobalMaxPooling2D(string data_format = "channels_last")
             => new GlobalMaxPooling2D(new Pooling2DArgs { DataFormat = data_format });
-
-
-        /// <summary>
-        /// Get an activation function layer from its name.
-        /// </summary>
-        /// <param name="name">The name of the activation function. One of linear, relu, sigmoid, and tanh.</param>
-        /// <returns></returns>
-
-        Activation GetActivationByName(string name)
-            => name switch
-            {
-                "linear" => keras.activations.Linear,
-                "relu" => keras.activations.Relu,
-                "sigmoid" => keras.activations.Sigmoid,
-                "tanh" => keras.activations.Tanh,
-                "softmax" => keras.activations.Softmax,
-                _ => throw new Exception($"Activation {name} not found")
-            };
 
         /// <summary>
         /// Get an weights initializer from its name.
@@ -821,7 +860,27 @@ namespace Tensorflow.Keras.Layers
                 "glorot_uniform" => tf.glorot_uniform_initializer,
                 "zeros" => tf.zeros_initializer,
                 "ones" => tf.ones_initializer,
+                "orthogonal" => tf.orthogonal_initializer,
                 _ => tf.glorot_uniform_initializer
             };
+
+        public ILayer CategoryEncoding(int num_tokens, string output_mode = "one_hot", bool sparse = false, NDArray count_weights = null)
+            => new CategoryEncoding(new CategoryEncodingArgs
+            {
+                NumTokens = num_tokens,
+                OutputMode = output_mode,
+                Sparse = sparse,
+                CountWeights = count_weights
+            });
+
+        public ILayer Normalization(Shape? input_shape = null, int? axis = -1, float? mean = null, float? variance = null, bool invert = false)
+            => new Normalization(new NormalizationArgs
+            {
+                InputShape = input_shape,
+                Axis = axis,
+                Mean = mean,
+                Variance = variance,
+                Invert = invert
+            });
     }
 }

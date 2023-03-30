@@ -18,8 +18,11 @@ using System;
 using System.Collections.Generic;
 using Tensorflow.Keras;
 using Tensorflow.Keras.ArgsDefinition;
+using Tensorflow.Keras.ArgsDefinition.Rnn;
 using Tensorflow.Keras.Engine;
+using Tensorflow.Keras.Saving;
 using Tensorflow.Operations;
+using Tensorflow.Train;
 using Tensorflow.Util;
 using static Tensorflow.Binding;
 
@@ -66,13 +69,16 @@ namespace Tensorflow
 
         public bool Trainable => throw new NotImplementedException();
 
-        public List<IVariableV1> trainable_variables => throw new NotImplementedException();
-        public List<IVariableV1> trainable_weights => throw new NotImplementedException();
-        public List<IVariableV1> non_trainable_weights => throw new NotImplementedException();
+        public List<IVariableV1> TrainableVariables => throw new NotImplementedException();
+        public List<IVariableV1> TrainableWeights => throw new NotImplementedException();
+        public List<IVariableV1> Weights => throw new NotImplementedException();
+        public List<IVariableV1> NonTrainableWeights => throw new NotImplementedException();
 
-        public Shape output_shape => throw new NotImplementedException();
+        public Shape OutputShape => throw new NotImplementedException();
 
         public Shape BatchInputShape => throw new NotImplementedException();
+
+        public TensorShapeConfig BuildInputShape => throw new NotImplementedException();
 
         public TF_DataType DType => throw new NotImplementedException();
         protected bool built = false;
@@ -142,7 +148,19 @@ namespace Tensorflow
             throw new NotImplementedException();
         }
 
-        public LayerArgs get_config()
+        public IKerasConfig get_config()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void build(Shape input_shape)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Trackable GetTrackable() { throw new NotImplementedException(); }
+
+        public void adapt(Tensor data, int? batch_size = null, int? steps = null)
         {
             throw new NotImplementedException();
         }

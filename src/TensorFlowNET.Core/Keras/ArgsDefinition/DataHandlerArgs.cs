@@ -1,11 +1,12 @@
 ﻿using Tensorflow.Keras.Engine;
+using Tensorflow.Keras.Saving;
 
 namespace Tensorflow.Keras.ArgsDefinition
 {
-    public class DataHandlerArgs
+    public class DataHandlerArgs: IKerasConfig
     {
-        public Tensor X { get; set; }
-        public Tensor Y { get; set; }
+        public Tensors X { get; set; }
+        public Tensors Y { get; set; }
         public IDatasetV2 Dataset { get; set; }
         public int BatchSize { get; set; } = 32;
         public int StepsPerEpoch { get; set; } = -1;

@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Tensorflow.Keras.ArgsDefinition;
+﻿using Tensorflow.Keras.ArgsDefinition;
+using Tensorflow.Keras.Engine;
 using Tensorflow.Keras.Utils;
 using Tensorflow.Train;
-using static Tensorflow.Binding;
 
 namespace Tensorflow.Keras.Optimizers
 {
@@ -48,7 +45,7 @@ namespace Tensorflow.Keras.Optimizers
         public void apply_gradients((Tensor, ResourceVariable) grads_and_vars,
             string name = null,
             bool experimental_aggregate_gradients = true)
-            => apply_gradients(grads_and_vars,
+            => apply_gradients(new[] { grads_and_vars },
                 name: name,
                 experimental_aggregate_gradients: experimental_aggregate_gradients);
 
@@ -114,12 +111,12 @@ namespace Tensorflow.Keras.Optimizers
             });
         }
 
-        public Tensor[] _aggregate_gradients(IEnumerable<(Tensor, IVariableV1)> grads_and_vars)
+        public Tensor[] aggregate_gradients(IEnumerable<(Tensor, IVariableV1)> grads_and_vars)
         {
             return grads_and_vars.Select(x => x.Item1).ToArray();
         }
 
-        public Tensor[] _clip_gradients(Tensor[] grads)
+        public Tensor[] clip_gradients(Tensor[] grads)
         {
             return grads;
         }

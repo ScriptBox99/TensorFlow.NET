@@ -131,13 +131,31 @@ namespace TensorFlowNET.Keras.UnitTest
         }
 
         [TestMethod]
-        [Ignore]
+        public void EinsumDense()
+        {
+            var ed = keras.layers.EinsumDense(
+                equation: "...b,bc->...c",
+                output_shape: 4,
+                bias_axes: "c",
+                bias_initializer: tf.constant_initializer(0.03),
+                kernel_initializer: tf.constant_initializer(0.5)
+            );
+            var inp = np.array(new[,] { { 1f, 2f }, { 3f, 4f } });
+            var expected_output = np.array(new[,] {{1.53f, 1.53f, 1.53f, 1.53f },
+                                { 3.53f, 3.53f, 3.53f, 3.53f }});
+            var actual_output = ed.Apply(inp)[0].numpy();
+            Assert.AreEqual(expected_output, actual_output);
+        }
+
+        [TestMethod, Ignore("WIP")]
         public void SimpleRNN()
         {
-            var inputs = np.random.rand(32, 10, 8).astype(np.float32);
-            var simple_rnn = keras.layers.SimpleRNN(4);
+            var inputs = np.arange(6 * 10 * 8).reshape((6, 10, 8)).astype(np.float32);
+            /*var simple_rnn = keras.layers.SimpleRNN(4);
             var output = simple_rnn.Apply(inputs);
-            Assert.AreEqual((32, 4), output.shape);
+            Assert.AreEqual((32, 4), output.shape);*/
+            var simple_rnn = tf.keras.layers.SimpleRNN(4, return_sequences: true, return_state: true);
+            var (whole_sequence_output, final_state) = simple_rnn.Apply(inputs);
         }
 
         [TestMethod]
@@ -157,6 +175,110 @@ namespace TensorFlowNET.Keras.UnitTest
             Tensor output = layer.Apply(inputs);
             Assert.AreEqual((5, 2), output.shape);
             Assert.IsTrue(output[0].numpy().Equals(new[] { -0.99998f, 0.99998f }));
+        }
+
+        /// <summary>
+        /// https://www.tensorflow.org/api_docs/python/tf/keras/layers/Normalization
+        /// </summary>
+        [TestMethod]
+        public void Normalization()
+        {
+            // Calculate a global mean and variance by analyzing the dataset in adapt().
+            var adapt_data = np.array(new[] { 1f, 2f, 3f, 4f, 5f });
+            var input_data = np.array(new[] { 1f, 2f, 3f });
+            var layer = tf.keras.layers.Normalization(axis: null);
+            layer.adapt(adapt_data);
+            var x = layer.Apply(input_data);
+            Assert.AreEqual(x.numpy(), new[] { -1.4142135f, -0.70710677f, 0f });
+
+            // Calculate a mean and variance for each index on the last axis.
+            adapt_data = np.array(new[,]
+            {
+                { 0, 7, 4 },
+                { 2, 9, 6 },
+                { 0, 7, 4 },
+                { 2, 9, 6 }
+            }, dtype: tf.float32);
+            input_data = np.array(new[,] { { 0, 7, 4 } }, dtype: tf.float32);
+            layer = tf.keras.layers.Normalization(axis: -1);
+            layer.adapt(adapt_data);
+            x = layer.Apply(input_data);
+            Equal(x.numpy().ToArray<float>(), new[] { -1f, -1f, -1f });
+
+            // Pass the mean and variance directly.
+            input_data = np.array(new[,] { { 1f }, { 2f }, { 3f } }, dtype: tf.float32);
+            layer = tf.keras.layers.Normalization(mean: 3f, variance: 2f);
+            x = layer.Apply(input_data);
+            Equal(x.numpy().ToArray<float>(), new[] { -1.4142135f, -0.70710677f, 0f });
+
+            // Use the layer to de-normalize inputs (after adapting the layer).
+            adapt_data = np.array(new[,]
+            {
+                { 0, 7, 4 },
+                { 2, 9, 6 },
+                { 0, 7, 4 },
+                { 2, 9, 6 }
+            }, dtype: tf.float32);
+            input_data = np.array(new[,] { { 1, 2, 3 } }, dtype: tf.float32);
+            layer = tf.keras.layers.Normalization(axis: -1, invert: true);
+            layer.adapt(adapt_data);
+            x = layer.Apply(input_data);
+            Equal(x.numpy().ToArray<float>(), new[] { -2f, -10f, -8f });
+        }
+
+        /// <summary>
+        /// https://www.tensorflow.org/api_docs/python/tf/keras/layers/CategoryEncoding
+        /// </summary>
+        [TestMethod]
+        public void CategoryEncoding()
+        {
+            // one-hot
+            var inputs = np.array(new[] { 3, 2, 0, 1 });
+            var layer = tf.keras.layers.CategoryEncoding(4);
+            
+            Tensor output = layer.Apply(inputs);
+            Assert.AreEqual((4, 4), output.shape);
+            Assert.IsTrue(output[0].numpy().Equals(new[] { 0, 0, 0, 1f }));
+            Assert.IsTrue(output[1].numpy().Equals(new[] { 0, 0, 1, 0f }));
+            Assert.IsTrue(output[2].numpy().Equals(new[] { 1, 0, 0, 0f }));
+            Assert.IsTrue(output[3].numpy().Equals(new[] { 0, 1, 0, 0f }));
+
+            // multi-hot
+            inputs = np.array(new[,]
+            {
+                { 0, 1 },
+                { 0, 0 },
+                { 1, 2 },
+                { 3, 1 }
+            });
+            layer = tf.keras.layers.CategoryEncoding(4, output_mode: "multi_hot");
+            output = layer.Apply(inputs);
+            Assert.IsTrue(output[0].numpy().Equals(new[] { 1, 1, 0, 0f }));
+            Assert.IsTrue(output[1].numpy().Equals(new[] { 1, 0, 0, 0f }));
+            Assert.IsTrue(output[2].numpy().Equals(new[] { 0, 1, 1, 0f }));
+            Assert.IsTrue(output[3].numpy().Equals(new[] { 0, 1, 0, 1f }));
+
+            // using weighted inputs in "count" mode
+            inputs = np.array(new[,]
+            {
+                { 0, 1 },
+                { 0, 0 },
+                { 1, 2 },
+                { 3, 1 }
+            });
+            var weights = np.array(new[,]
+            {
+                { 0.1f, 0.2f },
+                { 0.1f, 0.1f },
+                { 0.2f, 0.3f },
+                { 0.4f, 0.2f }
+            });
+            layer = tf.keras.layers.CategoryEncoding(4, output_mode: "count", count_weights: weights);
+            output = layer.Apply(inputs);
+            Assert.IsTrue(output[0].numpy().Equals(new[] { 0.1f, 0.2f, 0f, 0f }));
+            Assert.IsTrue(output[1].numpy().Equals(new[] { 0.2f, 0f, 0f, 0f }));
+            Assert.IsTrue(output[2].numpy().Equals(new[] { 0f, 0.2f, 0.3f, 0f }));
+            Assert.IsTrue(output[3].numpy().Equals(new[] { 0f, 0.2f, 0f, 0.4f }));
         }
     }
 }

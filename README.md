@@ -9,66 +9,75 @@
 [![Badge](https://img.shields.io/badge/link-996.icu-red.svg)](https://996.icu/#/en_US)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/javiercp/BinderTF.NET/master?urlpath=lab)
 
-*master branch is based on tensorflow v2.x, v0.6x branch is based on tensorflow v2.6, v0.15-tensorflow1.15 is from tensorflow1.15.*
+English | [中文](docs/README-CN.md)
+
+*master branch is corresponding to tensorflow v2.10, v0.6x branch is from tensorflow v2.6, v0.15-tensorflow1.15 is from tensorflow1.15.*
 
 
 ![tensors_flowing](docs/assets/tensors_flowing.gif)
 
-### Why TensorFlow in C# and F# ?
+## Why Tensorflow.NET ?
 
 `SciSharp STACK`'s mission is to bring popular data science technology into the .NET world and to provide .NET developers with a powerful Machine Learning tool set without reinventing the wheel. Since the APIs are kept as similar as possible you can immediately adapt any existing TensorFlow code in C# or F# with a zero learning curve. Take a look at a comparison picture and see how comfortably a TensorFlow/Python script translates into a C# program with TensorFlow.NET.
 
-![pythn vs csharp](docs/assets/syntax-comparision.png)
+![python vs csharp](docs/assets/syntax-comparision.png)
 
 SciSharp's philosophy allows a large number of machine learning code written in Python to be quickly migrated to .NET, enabling .NET developers to use cutting edge machine learning models and access a vast number of TensorFlow resources which would not be possible without this project.
 
-In comparison to other projects, like for instance [TensorFlowSharp](https://www.nuget.org/packages/TensorFlowSharp/) which only provide TensorFlow's low-level C++ API and can only run models that were built using Python, Tensorflow.NET also implements TensorFlow's high level API where all the magic happens. This computation graph building layer is still under active development. Once it is completely implemented you can build new Machine Learning models in C# or F#. 
+In comparison to other projects, like for instance [TensorFlowSharp](https://www.nuget.org/packages/TensorFlowSharp/) which only provide TensorFlow's low-level C++ API and can only run models that were built using Python, Tensorflow.NET makes it possible to build the pipeline of training and inference with pure C# and F#. Besides, Tensorflow.NET provides binding of Tensorflow.Keras to make it easy to transfer your code from python to .NET.
 
-Go through the online docs [TensorFlow for .NET](https://scisharp.github.io/tensorflow-net-docs) before you get started with Machine Learning in .NET.
+[ML.NET](https://github.com/dotnet/machinelearning) also take Tensorflow.NET as one of the backends to train and infer your model, which provides better integration with .NET.
 
-### How to use
+## Documention
 
-| TensorFlow                 | tf native1.14, cuda 10.0 | tf native 1.15, cuda 10.0 | tf native 2.3, cuda 10.1 | tf native 2.4, cuda 11 |
-| -------------------------- | ------------- | -------------- | ------------- | ------------- |
-| tf.net 0.4x, tf.keras 0.5 |  |  |  | x |
-| tf.net 0.3x, tf.keras 0.4 |               |                | x |  |
-| tf.net 0.2x          |               | x | x |              |
-| tf.net 0.15          | x | x |               |               |
-| tf.net 0.14          | x |                |               |               |
+Introduction and simple examples：[Tensorflow.NET Documents](https://scisharp.github.io/tensorflow-net-docs)
 
-Troubleshooting of running example or installation, please  refer [here](tensorflowlib/README.md).
+Detailed documention：[The Definitive Guide to Tensorflow.NET](https://tensorflownet.readthedocs.io/en/latest/FrontCover.html)
 
-There are many examples reside at [TensorFlow.NET Examples](https://github.com/SciSharp/TensorFlow.NET-Examples) written in C# and F#.
+Examples：[TensorFlow.NET Examples](https://github.com/SciSharp/TensorFlow.NET-Examples)
 
-#### C# Example
+Troubleshooting of running example or installation：[Tensorflow.NET FAQ](tensorflowlib/README.md)
 
-Install TF.NET and TensorFlow binary through NuGet.
+## Usage
+
+### Installation
+
+You can search the package name in NuGet Manager, or use the commands below in package manager console.
+
+The installation contains two parts, the first is the main body:
+
 ```sh
-### install tensorflow C#/F# binding
+### Install Tensorflow.NET
 PM> Install-Package TensorFlow.NET
-### install keras for tensorflow
+
+### Install Tensorflow.Keras
 PM> Install-Package TensorFlow.Keras
-
-### Install tensorflow binary
-### For CPU version
-PM> Install-Package SciSharp.TensorFlow.Redist
-
-### For GPU version (CUDA and cuDNN are required)
-PM> Install-Package SciSharp.TensorFlow.Redist-Windows-GPU
 ```
 
-Import TF.NET and Keras API in your project.
+The second part is the computing support part. Only one of the following packages is needed, depending on your device and system.
+
+```
+### CPU version for Windows, Linux and Mac
+PM> Install-Package SciSharp.TensorFlow.Redist
+
+### GPU version for Windows (CUDA and cuDNN are required)
+PM> Install-Package SciSharp.TensorFlow.Redist-Windows-GPU
+
+### GPU version for Linux (CUDA and cuDNN are required)
+PM> Install-Package SciSharp.TensorFlow.Redist-Linux-GPU
+```
+
+
+Two simple examples are given here to introduce the basic usage of Tensorflow.NET. As you can see, it's easy to write C# code just like that in Python.
+
+### Example - Linear Regression in `Eager` mode
 
 ```csharp
 using static Tensorflow.Binding;
 using static Tensorflow.KerasApi;
 using Tensorflow;
 using Tensorflow.NumPy;
-```
 
-Linear Regression in `Eager` mode:
-
-```csharp
 // Parameters        
 var training_steps = 1000;
 var learning_rate = 0.01f;
@@ -114,10 +123,15 @@ foreach (var step in range(1, training_steps + 1))
 
 Run this example in [Jupyter Notebook](https://github.com/SciSharp/SciSharpCube).
 
-Toy version of `ResNet` in `Keras` functional API:
+### Example - Toy version of `ResNet` in `Keras` functional API
 
 ```csharp
-var layers = new LayersApi();
+using static Tensorflow.Binding;
+using static Tensorflow.KerasApi;
+using Tensorflow;
+using Tensorflow.NumPy;
+
+var layers = keras.layers;
 // input layer
 var inputs = keras.Input(shape: (32, 32, 3), name: "img");
 // convolutional layer
@@ -141,96 +155,67 @@ var model = keras.Model(inputs, outputs, name: "toy_resnet");
 model.summary();
 // compile keras model in tensorflow static graph
 model.compile(optimizer: keras.optimizers.RMSprop(1e-3f),
-    loss: keras.losses.CategoricalCrossentropy(from_logits: true),
+    loss: keras.losses.SparseCategoricalCrossentropy(from_logits: true),
     metrics: new[] { "acc" });
 // prepare dataset
 var ((x_train, y_train), (x_test, y_test)) = keras.datasets.cifar10.load_data();
+// normalize the input
 x_train = x_train / 255.0f;
-y_train = np_utils.to_categorical(y_train, 10);
 // training
 model.fit(x_train[new Slice(0, 2000)], y_train[new Slice(0, 2000)],
-          batch_size: 64,
-          epochs: 10,
-          validation_split: 0.2f);
+            batch_size: 64,
+            epochs: 10,
+            validation_split: 0.2f);
+// save the model
+model.save("./toy_resnet_model");
 ```
 
-#### F# Example
+The F# example for linear regression is available [here](docs/Example-fsharp.md).
 
-Linear Regression in `Eager` mode:
+More adcanced examples could be found in [TensorFlow.NET Examples](https://github.com/SciSharp/TensorFlow.NET-Examples).
 
-```fsharp
-#r "nuget: TensorFlow.Net"
-#r "nuget: TensorFlow.Keras"
-#r "nuget: SciSharp.TensorFlow.Redist"
+## Version Relationships
 
-open Tensorflow
-open Tensorflow.NumPy
-open type Tensorflow.Binding
-open type Tensorflow.KerasApi
+| TensorFlow.NET Versions                 | tensorflow 1.14, cuda 10.0 | tensorflow 1.15, cuda 10.0 | tensorflow 2.3, cuda 10.1 | tensorflow 2.4, cuda 11 | tensorflow 2.7, cuda 11 |tensorflow 2.10, cuda 11 |
+| -------------------------- | ------------- | -------------- | ------------- | ------------- | ------------ | ------------ |
+| tf.net 0.10x, tf.keras 0.10 |  |  |  |  |  | x |
+| tf.net 0.7x, tf.keras 0.7   |  |  |  |  | x |  |
+| tf.net 0.4x, tf.keras 0.5   |  |  |  | x |  |  |
+| tf.net 0.3x, tf.keras 0.4   |  |  | x |  |  |  |
+| tf.net 0.2x                 |  | x | x |  |  |  |
+| tf.net 0.15                 | x | x |  |  |  |  |
+| tf.net 0.14                 | x |  |  |  |  |  |
 
-let tf = New<tensorflow>()
-tf.enable_eager_execution()
 
-// Parameters
-let training_steps = 1000
-let learning_rate = 0.01f
-let display_step = 100
-
-// Sample data
-let train_X = 
-    np.array(3.3f, 4.4f, 5.5f, 6.71f, 6.93f, 4.168f, 9.779f, 6.182f, 7.59f, 2.167f,
-             7.042f, 10.791f, 5.313f, 7.997f, 5.654f, 9.27f, 3.1f)
-let train_Y = 
-    np.array(1.7f, 2.76f, 2.09f, 3.19f, 1.694f, 1.573f, 3.366f, 2.596f, 2.53f, 1.221f,
-             2.827f, 3.465f, 1.65f, 2.904f, 2.42f, 2.94f, 1.3f)
-let n_samples = train_X.shape.[0]
-
-// We can set a fixed init value in order to demo
-let W = tf.Variable(-0.06f,name = "weight")
-let b = tf.Variable(-0.73f, name = "bias")
-let optimizer = keras.optimizers.SGD(learning_rate)
-
-// Run training for the given number of steps.
-for step = 1 to  (training_steps + 1) do 
-    // Run the optimization to update W and b values.
-    // Wrap computation inside a GradientTape for automatic differentiation.
-    use g = tf.GradientTape()
-    // Linear regression (Wx + b).
-    let pred = W * train_X + b
-    // Mean square error.
-    let loss = tf.reduce_sum(tf.pow(pred - train_Y,2)) / (2 * n_samples)
-    // should stop recording
-    // compute gradients
-    let gradients = g.gradient(loss,struct (W,b))
-
-    // Update W and b following gradients.
-    optimizer.apply_gradients(zip(gradients, struct (W,b)))
-
-    if (step % display_step) = 0 then
-        let pred = W * train_X + b
-        let loss = tf.reduce_sum(tf.pow(pred-train_Y,2)) / (2 * n_samples)
-        printfn $"step: {step}, loss: {loss.numpy()}, W: {W.numpy()}, b: {b.numpy()}"
+```
+tf.net 0.4x -> tf native 2.4 
+tf.net 0.6x -> tf native 2.6      
+tf.net 0.7x -> tf native 2.7
+tf.net 0.10x -> tf native 2.10
+...
 ```
 
-Read the book [The Definitive Guide to Tensorflow.NET](https://tensorflownet.readthedocs.io/en/latest/FrontCover.html) if you want to know more about TensorFlow for .NET under the hood.
+## Contribution:
 
-### Contribute:
+Feel like contributing to one of the hottest projects in the Machine Learning field? Want to know how Tensorflow magically creates the computational graph? 
 
-Feel like contributing to one of the hottest projects in the Machine Learning field? Want to know how Tensorflow magically creates the computational graph? We appreciate every contribution however small. There are tasks for novices to experts alike, if everyone tackles only a small task the sum of contributions will be huge.
+We appreciate every contribution however small! There are tasks for novices to experts alike, if everyone tackles only a small task the sum of contributions will be huge.
 
 You can:
-* Let everyone know about this project
-* Port Tensorflow unit tests from Python to C# or F#
-* Port missing Tensorflow code from Python to C# or F#
-* Port Tensorflow examples to C# or F# and raise issues if you come accross missing parts of the API
-* Debug one of the unit tests that is marked as Ignored to get it to work
-* Debug one of the not yet working examples and get it to work
+- Star Tensorflow.NET or share it with others
+- Tell us about the missing APIs compared to Tensorflow
+- Port Tensorflow unit tests from Python to C# or F#
+- Port Tensorflow examples to C# or F# and raise issues if you come accross missing parts of the API or BUG
+- Debug one of the unit tests that is marked as Ignored to get it to work
+- Debug one of the not yet working examples and get it to work
+- Help us to complete the documentions.
 
-### How to debug unit tests:
+
+#### How to debug unit tests:
 
 The best way to find out why a unit test is failing is to single step it in C# or F# and its corresponding Python at the same time to see where the flow of execution digresses or where variables exhibit different values. Good Python IDEs like PyCharm let you single step into the tensorflow library code. 
 
-### Git Knowhow for Contributors
+#### Git Knowhow for Contributors
 
 Add SciSharp/TensorFlow.NET as upstream to your local repo ...
 ```git
@@ -242,15 +227,19 @@ Please make sure you keep your fork up to date by regularly pulling from upstrea
 git pull upstream master
 ```
 
+### Support
+Buy our book to make open source project be sustainable [TensorFlow.NET实战](https://item.jd.com/13441549.html)
+<p float="left">
+<img src="https://user-images.githubusercontent.com/1705364/198852429-91741881-c196-401e-8e9e-2f8656196613.png" width="250" />
+<img src="https://user-images.githubusercontent.com/1705364/198852521-2f842043-3ace-49d2-8533-039c6a043a3f.png" width="260" />
+<img src="https://user-images.githubusercontent.com/1705364/198852721-54cd9e7e-9210-4931-a86c-77584b25b8e1.png" width="260" />
+</p>
+
 ### Contact
 
 Follow us on [Twitter](https://twitter.com/ScisharpStack), [Facebook](https://www.facebook.com/scisharp.stack.9), [Medium](https://medium.com/scisharp), [LinkedIn](https://www.linkedin.com/company/scisharp-stack/).
 
 Join our chat on [Gitter](https://gitter.im/sci-sharp/community).
-
-WeChat Sponsor 微信打赏:
-
-![SciSharp STACK](docs/assets/WeChatCollection.jpg)
 
 TensorFlow.NET is a part of [SciSharp STACK](https://scisharp.github.io/SciSharp/)
 <br>

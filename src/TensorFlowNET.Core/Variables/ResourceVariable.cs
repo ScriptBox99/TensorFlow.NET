@@ -17,7 +17,9 @@
 using Google.Protobuf;
 using System;
 using System.Collections.Generic;
+using Tensorflow.Checkpoint;
 using Tensorflow.NumPy;
+using Tensorflow.Train;
 using static Tensorflow.Binding;
 
 namespace Tensorflow
@@ -39,6 +41,7 @@ namespace Tensorflow
             VariableAggregation aggregation = VariableAggregation.None,
             Shape shape = null)
         {
+            Aggregation = aggregation;
             if (variable_def != null)
             {
                 if (initial_value != null)
@@ -234,6 +237,24 @@ namespace Tensorflow
         public NDArray eval(Session session = null)
         {
             return _graph_element.eval(session);
+        }
+
+        public static (VariableSynchronization, VariableAggregation, bool) validate_synchronization_aggregation_trainable(
+            VariableSynchronization? synchronization, VariableAggregation? aggregation, bool? trainable, string name)
+        {
+            if(aggregation is null)
+            {
+                aggregation = VariableAggregation.None;
+            }
+            if(synchronization is null)
+            {
+                synchronization = VariableSynchronization.Auto;
+            }
+            if (trainable is null)
+            {
+                trainable = synchronization != VariableSynchronization.OnRead;
+            }
+            return (synchronization.Value, aggregation.Value, trainable.Value);
         }
     }
 }

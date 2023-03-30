@@ -44,8 +44,6 @@ namespace Tensorflow.Keras.Engine
             : base(args.Inputs, args.Outputs, name: args.Name)
         {
             this.args = args;
-            if (args.Layers == null)
-                args.Layers = new List<ILayer>();
             // SupportsMasking = true;
             _compute_output_and_mask_jointly = true;
             _auto_track_sub_layers = false;
@@ -54,10 +52,17 @@ namespace Tensorflow.Keras.Engine
             _created_nodes = new List<INode>();
 
             // Add to the model any layers passed to the constructor.
-            if (args.Layers != null)
+            if (args.Layers is not null)
             {
-                foreach (var layer in args.Layers)
-                    add(layer);
+                InitLayers(args.Layers);
+            }
+        }
+
+        public void InitLayers(IEnumerable<ILayer> layers)
+        {
+            foreach(var layer in layers)
+            {
+                add(layer);
             }
         }
 
@@ -75,7 +80,7 @@ namespace Tensorflow.Keras.Engine
         {
             built = false;
             var set_inputs = false;
-            if (_layers.Count == 0)
+            if (_self_tracked_trackables.Count == 0)
             {
                 if (layer is InputLayer)
                 {
@@ -110,6 +115,8 @@ namespace Tensorflow.Keras.Engine
             }
             else if (outputs != null)
             {
+                // If the model is being built continuously on top of an input layer:
+                // refresh its output.
                 outputs = layer.Apply(outputs);
                 built = true;
             }
@@ -122,13 +129,7 @@ namespace Tensorflow.Keras.Engine
             else
             {
                 _self_tracked_trackables.add(layer);
-                _handle_deferred_layer_dependencies(layer);
             }
-        }
-
-        void _handle_deferred_layer_dependencies(params ILayer[] layers)
-        {
-            _layers.AddRange(layers);
         }
 
         protected override Tensors Call(Tensors inputs, Tensor state = null, bool? training = null)
@@ -156,12 +157,12 @@ namespace Tensorflow.Keras.Engine
             ops.init_scope();
             var inputs = keras.Input(batch_input_shape: input_shape,
                 dtype: input_dtype,
-                name: $"{_layers[0].Name}_input");
+                name: _self_tracked_trackables[0].Name.EndsWith("_input") ? _self_tracked_trackables[0].Name : $"{_self_tracked_trackables[0].Name}_input");
             Tensors layer_input = inputs;
             Tensors layer_output = null;
             Tensors outputs = null;
             List<INode> created_nodes = new List<INode>();
-            foreach (var layer in _layers)
+            foreach (var layer in args.Layers)
             {
                 clear_previously_created_nodes(layer, _created_nodes);
                 layer_output = layer.Apply(layer_input);
@@ -202,5 +203,8 @@ namespace Tensorflow.Keras.Engine
                 created_nodes.add(prev_layer.OutboundNodes.Last());
             }
         }
+
+        public override List<ILayer> Layers
+            => base.Layers.Where(x => x is not InputLayer).ToList();
     }
 }

@@ -113,6 +113,9 @@ namespace Tensorflow
         public static Tensor diag(Tensor diagonal, string name = null)
             => tf.Context.ExecuteOp("Diag", name, new ExecuteOpArgs(diagonal));
 
+        public static Tensor diag_part(Tensor diagonal, string name = null)
+            => tf.Context.ExecuteOp("DiagPart", name, new ExecuteOpArgs(diagonal));
+
         public static Tensor expand_dims(Tensor input, int axis, string name = null)
             => tf.Context.ExecuteOp("ExpandDims", name, new ExecuteOpArgs(input, axis)
                 .SetAttributes(new { dim = axis }));
@@ -266,7 +269,7 @@ namespace Tensorflow
 
         public static Tensor[] unpack(Tensor value, int num, int axis = 0, string name = null)
             => tf.Context.ExecuteOp("Unpack", name, new ExecuteOpArgs(value, num)
-                    .SetAttributes(new { axis }));
+                    .SetAttributes(new { axis, num }));
 
         public static Tensor where(Tensor condition, string name = null)
         {

@@ -15,11 +15,11 @@ namespace Tensorflow.Keras.Layers {
             public SELU ( LayerArgs args ) : base(args) {
                   // SELU has no arguments
             }
-            protected override void build ( Tensors inputs ) {
-                  if ( alpha < 0f ) {
-                        throw new ValueError("Alpha must be a number greater than 0.");
-                  }
-                  built = true;
+            public override void build(Shape input_shape) {
+                if ( alpha < 0f ) {
+                    throw new ValueError("Alpha must be a number greater than 0.");
+                }
+                base.build(input_shape);
             }
             protected override Tensors Call ( Tensors inputs, Tensor state = null, bool? training = null ) {
                   Tensor output = inputs;

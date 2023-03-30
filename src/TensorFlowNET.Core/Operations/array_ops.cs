@@ -221,6 +221,9 @@ namespace Tensorflow
                     case Tensor t:
                         dtype = t.dtype.as_base_dtype();
                         break;
+                    case int t:
+                        dtype = TF_DataType.TF_INT32;
+                        break;
                 }
 
                 if (dtype != TF_DataType.DtInvalid)
@@ -585,9 +588,14 @@ namespace Tensorflow
         }
 
         public static Tensor tile(Tensor input, Tensor multiples, string name = null)
-        {
-            throw new NotImplementedException("tile");
-        }
+            => tf.Context.ExecuteOp("Tile", name, new ExecuteOpArgs(input, multiples)
+            {
+                GetGradientAttrs = (op) => new
+                {
+                    T = op.get_attr<TF_DataType>("T"),
+                    Tmultiples = op.get_attr<TF_DataType>("Tmultiples")
+                }
+            });
 
         public static Tensor zeros_like(Tensor tensor, TF_DataType dtype = TF_DataType.DtInvalid, string name = null, bool optimize = true)
         {

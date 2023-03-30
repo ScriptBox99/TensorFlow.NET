@@ -10,26 +10,44 @@ using Tensorflow.Keras.Losses;
 using Tensorflow.Keras.Metrics;
 using Tensorflow.Keras.Models;
 using Tensorflow.Keras.Optimizers;
-using Tensorflow.Keras.Saving;
 using Tensorflow.Keras.Utils;
 using System.Threading;
+using Tensorflow.Framework.Models;
 
 namespace Tensorflow.Keras
 {
-    public class KerasInterface
+    public class KerasInterface : IKerasApi
     {
+        private static KerasInterface _instance = null;
+        private static readonly object _lock = new object();  
+
+        public static KerasInterface Instance
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    if (_instance is null)
+                    {
+                        _instance = new KerasInterface();
+                    }
+                    return _instance;
+                }
+            }
+        }
+
         public KerasDataset datasets { get; } = new KerasDataset();
-        public Initializers initializers { get; } = new Initializers();
+        public IInitializersApi initializers { get; } = new InitializersApi();
         public Regularizers regularizers { get; } = new Regularizers();
-        public LayersApi layers { get; } = new LayersApi();
-        public LossesApi losses { get; } = new LossesApi();
-        public Activations activations { get; } = new Activations();
+        public ILayersApi layers { get; } = new LayersApi();
+        public ILossesApi losses { get; } = new LossesApi();
+        public IActivationsApi activations { get; } = new Activations();
         public Preprocessing preprocessing { get; } = new Preprocessing();
         ThreadLocal<BackendImpl> _backend = new ThreadLocal<BackendImpl>(() => new BackendImpl());
         public BackendImpl backend => _backend.Value;
-        public OptimizerApi optimizers { get; } = new OptimizerApi();
-        public MetricsApi metrics { get; } = new MetricsApi();
-        public ModelsApi models { get; } = new ModelsApi();
+        public IOptimizerApi optimizers { get; } = new OptimizerApi();
+        public IMetricsApi metrics { get; } = new MetricsApi();
+        public IModelsApi models { get; } = new ModelsApi();
         public KerasUtils utils { get; } = new KerasUtils();
 
         public Sequential Sequential(List<ILayer> layers = null,
@@ -40,13 +58,19 @@ namespace Tensorflow.Keras
                 Name = name
             });
 
+        public Sequential Sequential(params ILayer[] layers)
+            => new Sequential(new SequentialArgs
+            {
+                Layers = layers.ToList()
+            });
+
         /// <summary>
         /// `Model` groups layers into an object with training and inference features.
         /// </summary>
         /// <param name="input"></param>
         /// <param name="output"></param>
         /// <returns></returns>
-        public Functional Model(Tensors inputs, Tensors outputs, string name = null)
+        public IModel Model(Tensors inputs, Tensors outputs, string name = null)
             => new Functional(inputs, outputs, name: name);
 
         /// <summary>
@@ -67,33 +91,16 @@ namespace Tensorflow.Keras
         /// If set, the layer will not create a placeholder tensor.
         /// </param>
         /// <returns></returns>
-        public Tensor Input(Shape shape = null,
-                int batch_size = -1,
-                Shape batch_input_shape = null,
-                TF_DataType dtype = TF_DataType.DtInvalid,
-                string name = null,
-                bool sparse = false,
-                bool ragged = false,
-                Tensor tensor = null)
-        {
-            if (batch_input_shape != null)
-                shape = batch_input_shape.dims.Skip(1).ToArray();
-
-            var args = new InputLayerArgs
-            {
-                Name = name,
-                InputShape = shape,
-                BatchInputShape = batch_input_shape,
-                BatchSize = batch_size,
-                DType = dtype,
-                Sparse = sparse,
-                Ragged = ragged,
-                InputTensor = tensor
-            };
-
-            var layer = new InputLayer(args);
-
-            return layer.InboundNodes[0].Outputs;
-        }
+        public Tensors Input(Shape shape = null,
+            int batch_size = -1,
+            string name = null,
+            TF_DataType dtype = TF_DataType.DtInvalid,
+            bool sparse = false,
+            Tensor tensor = null,
+            bool ragged = false,
+            TypeSpec type_spec = null,
+            Shape batch_input_shape = null,
+            Shape batch_shape = null) => keras.layers.Input(shape, batch_size, name,
+                dtype, sparse, tensor, ragged, type_spec, batch_input_shape, batch_shape);
     }
 }

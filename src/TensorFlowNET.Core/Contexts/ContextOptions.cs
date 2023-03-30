@@ -14,21 +14,21 @@
    limitations under the License.
 ******************************************************************************/
 
-using System;
 using Tensorflow.Eager;
 
-namespace Tensorflow.Contexts
+namespace Tensorflow.Contexts;
+
+public sealed class ContextOptions
 {
-    public sealed class ContextOptions : IDisposable
+    SafeContextOptionsHandle _handle { get; }
+
+    public ContextOptions()
     {
-        public SafeContextOptionsHandle Handle { get; }
+        _handle = c_api.TFE_NewContextOptions();
+    }
 
-        public ContextOptions()
-        {
-            Handle = c_api.TFE_NewContextOptions();
-        }
-
-        public void Dispose()
-            => Handle.Dispose();
+    public static implicit operator SafeContextOptionsHandle(ContextOptions opt)
+    {
+        return opt._handle;
     }
 }

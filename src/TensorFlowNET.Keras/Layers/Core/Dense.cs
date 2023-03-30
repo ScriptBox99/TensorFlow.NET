@@ -41,9 +41,9 @@ namespace Tensorflow.Keras.Layers
             this.inputSpec = new InputSpec(min_ndim: 2);
         }
 
-        protected override void build(Tensors inputs)
+        public override void build(Shape input_shape)
         {
-            Shape input_shape = inputs.shape;
+            _buildInputShape = input_shape;
             var last_dim = input_shape.dims.Last();
             var axes = new Dictionary<int, int>();
             axes[-1] = (int)last_dim;
@@ -81,14 +81,9 @@ namespace Tensorflow.Keras.Layers
             if (args.UseBias)
                 outputs = tf.nn.bias_add(outputs, bias);
             if (args.Activation != null)
-                outputs = activation(outputs);
+                outputs = activation.Apply(outputs);
 
             return outputs;
-        }
-
-        public static Dense from_config(LayerArgs args)
-        {
-            return new Dense(args as DenseArgs);
         }
     }
 }

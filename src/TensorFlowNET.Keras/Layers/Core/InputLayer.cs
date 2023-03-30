@@ -18,6 +18,7 @@ using System.Linq;
 using Tensorflow.Framework.Models;
 using Tensorflow.Keras.ArgsDefinition;
 using Tensorflow.Keras.Engine;
+using Tensorflow.Keras.Saving.SavedModel;
 using static Tensorflow.Binding;
 using static Tensorflow.KerasApi;
 
@@ -101,9 +102,6 @@ namespace Tensorflow.Keras.Layers
                 name: Name);
         }
 
-        public static InputLayer from_config(LayerArgs args)
-        {
-            return new InputLayer(args as InputLayerArgs);
-        }
+        public override SavedModelSaver TrackableSavedModelSaver => new InputLayerSavedModelSaver(this);
     }
 }
